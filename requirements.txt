@@ -1,0 +1,9 @@
+requests
+numpy
+pytz
+faiss-cpu
+boto3
+fitz  # PyMuPDF
+streamlit
+sentence-transformers
+tavily-python
