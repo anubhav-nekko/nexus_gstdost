@@ -1,9 +1,13 @@
 requests
-numpy
-pytz
+PyMuPDF
 faiss-cpu
-boto3
-fitz  # PyMuPDF
 streamlit
 sentence-transformers
+numpy
+pytz
+boto3
 tavily-python
+streamlit-cookies-manager
+streamlit-authenticator
+matplotlib
+plotly

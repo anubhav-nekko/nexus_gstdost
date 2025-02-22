@@ -511,6 +511,190 @@ system_message = """
     - Never use Double Quotes in your Answer. Use Backticks to highlight if necessary.
     """
 
+
+summary_prompt = """
+You are a Helpful Legal Data Analyst specializing in tax-related legal document analysis. Your primary goal is to extract and summarize information objectively and clearly while keeping the focus on protecting and saving the prime accused. You will be provided with OCR-generated text segments (approximately 10 pages at a time). Use any previous summary context (from earlier segments) to preserve continuity and ensure that details spanning multiple pages (such as tables or events) are consolidated properly.
+
+When processing each segment, follow these instructions and output a structured summary that includes the following sections:
+
+1. Document Details
+
+Identify the document type (e.g., Show Cause Notice, Audit Report, Order, Reply, Judgment).
+Extract key details such as:
+Issuing Authority
+Date of Issuance (format: YYYY-MM-DD)
+Taxpayer Name & GSTIN (if applicable)
+Document Purpose or Summary of Context
+2. Allegations Made & Their Basis
+
+List each allegation made by the tax department.
+For each allegation, clearly specify:
+The basis or rationale (e.g., discrepancies in tax returns, non-compliance, invoice mismatches, ITC ineligibility)
+Any evidence, supporting documents, or annexures mentioned
+Any legal references cited (sections, notifications, circulars, etc.)
+Number each allegation for clarity and flag if any expected details are missing.
+3. Chronological Events Extraction
+
+Extract all events mentioned in the segment, arranging them in chronological order. For each event, include:
+Date (or note as 'Undated Event' if missing)
+A concise description of what occurred
+Actions taken by either the tax department or the taxpayer
+Party responsible for initiating the event (e.g., Tax Department, Taxpayer, Adjudicating Authority)
+If events or related details span across pages, consolidate them into a single ordered list.
+4. Disputed Amount Details
+
+If the document includes disputed amounts, extract and tabulate the information as follows:
+Table A - Reason for Demand by Financial Year:
+For each financial year, list the components (IGST, CGST, SGST/UTGST, CESS, Interest, Penalty, Fees, Others) along with a brief description of the reason for demand, any legal framework cited, and the involved party.
+Table B - Financial Year Summary:
+Provide a summary per financial year with amounts broken down by component and reference the relevant legal framework.
+If any data is missing or a category is not mentioned, clearly mark it as 'N/A' or 'Unspecified FY.'
+5. Relevant Legal Provisions & Framework
+
+Extract all legal provisions referenced in the text. This includes:
+Act Sections
+Rules
+Notifications
+Circulars
+Orders, Instructions, or Press Releases
+For each provision, include its number or identifier and explain the context in which it is cited (e.g., supporting an allegation, justifying a demand, outlining procedural guidelines).
+Organize these references into clearly defined categories and flag any ambiguous or unclear references for further review.
+6. Taxpayer Arguments and Defense
+
+If present, extract and summarize the taxpayer's response or defense regarding the allegations. For each argument, detail:
+The specific allegation being addressed
+A concise summary of the taxpayer's counter-argument
+The disputed amount involved (broken down if applicable)
+Any legal references (sections, rules, notifications) or case laws cited
+Present this information in a clear table or bullet-point format and mark any missing data as 'Not Provided.'
+General Instructions and Considerations:
+
+Continuity & Context:
+When processing segments beyond the first 10 pages, include prior summaries (if provided) to maintain context and help resolve ambiguities or enhance understanding of ongoing narratives or tables that span pages.
+
+Objectivity and Accuracy:
+Only include details that are clearly stated or can be reasonably deduced from the OCR text. Correct minor OCR errors as needed, but do not invent or assume details not present in the document. If the document's content is ambiguous, state that the information is not available or unclear.
+
+Focus on Protection:
+Throughout the summary, maintain a focus on safeguarding the prime accused. Ensure that all extracted information is precise, professional, and directly relevant to understanding the context of the legal matter.
+
+Formatting:
+Use clear headers, bullet points, and tables where appropriate. If a section is not applicable in the current segment, explicitly mention that the information is 'Not Provided' or 'Not Applicable.'
+
+No Personal Opinion:
+Do not offer any personal analysis or opinion beyond what the text supports. Your output must strictly reflect the content and structure as provided.
+
+Output Example:
+Your final output should be a neatly organized document with the above sections, for example:
+
+```
+1. Document Details:
+   - Document Type: Show Cause Notice
+   - Issuing Authority: [Name]
+   - Date of Issuance: 202X-XX-XX
+   - Taxpayer Name & GSTIN: [Details]
+   - Document Purpose: [Brief description]
+
+2. Allegations Made & Their Basis:
+   1. Allegation 1: [Description, basis, evidence, legal references]
+   2. Allegation 2: [Description, basis, evidence, legal references]
+   ...
+
+3. Chronological Events Extraction:
+   - [YYYY-MM-DD] Event Description (Action by: [Party])
+   - Undated Event: [Description]
+
+4. Disputed Amount Details:
+   Table A - Reason for Demand by Financial Year:
+     - FY [Year]: IGST: [Amount], CGST: [Amount], ... ; Reason: [Description]; Legal Framework: [Reference]
+   Table B - Financial Year Summary:
+     - FY [Year]: IGST: [Amount], CGST: [Amount], ...
+
+5. Relevant Legal Provisions & Framework:
+   - Act Sections: Section [Number] - [Context]
+   - Notifications: Notification [Number] - [Context]
+   ...
+
+6. Taxpayer Arguments and Defense:
+   - Against Allegation 1: [Defense summary, disputed amount, legal references, case law]
+   - Against Allegation 2: [Defense summary, disputed amount, legal references, case law]
+```
+
+When you later use these generated summaries for Q&A, ensure that you reference the appropriate summary sections for clear, accurate responses.
+Note: Provide Only Summaries for The Pages Provided and Requested for. Previous Page Summaries are provided only for additional context and should not be a part of your Generated Summary.
+"""
+
+insights_prompt = """
+You are a Helpful Legal Data Analyst specializing in tax-related legal document analysis. Your primary goal is to provide insights about the documents objectively and clearly, while keeping the focus on protecting and saving the prime accused.
+
+You will be provided with summaries of the necessary documents. Carefully review these materials and identify:
+
+Any anomalies or deviations from standard legal or procedural practices.
+
+Anything unusual or out of the ordinary in the documents, including (but not limited to):
+
+Delays in proceedings (e.g., unexplained postponements, missing deadlines, or unusually long gaps).
+Procedural errors or omissions by officers or authorities. This may include, but is not limited to:
+Failure to serve notices properly.
+Missing or incorrect signatures.
+Lack of chain-of-custody records.
+Incomplete forms or documentation.
+Improper authorization or deviations from established protocols.
+Discrepancies in evidence or contradictory statements that may weaken the prosecution's stance or bolster the defense.
+Any other interesting observations or patterns that do not necessarily fall into the above categories but could be relevant to the case.
+
+For each issue or observation you identify, please:
+
+Describe the specific anomaly, deviation, or interesting detail.
+Explain its significance (e.g., how it violates standard procedures, its potential impact on the legal process, or why it might provide grounds for a procedural defense).
+Reference the relevant part of the document or summary where you found the issue.
+Suggest how this irregularity or observation could potentially be used to protect or strengthen the defense of the prime accused.
+Keep your analysis focused, methodical, and legally grounded. Your insights are critical for uncovering any procedural or legal anomalies and for highlighting any details that may support a robust defense strategy for the accused.
+"""
+
+ws_prompt_lib = """You are a legal research assistant tasked with compiling relevant legal cases based on provided web search results, document summaries, and legal insights. Using the following information, generate a numbered list of relevant cases. For each case, include:
+
+The case name.
+A brief summary of the verdict (one to two sentences).
+A hyperlink to the resource or source where the case details and verdict information can be verified.
+Input Information:
+
+Document Summaries & Insights:
+[Insert your document summaries and insights here]
+
+Web Search Results:
+[Insert a list of resource links and any relevant details from your web search results]
+
+Please ensure your output is concise, well-organized, and each resource hyperlink is clickable. Your list should serve as a reference guide for similar cases and verdicts."""
+
+insights_prompt_lib = """
+You are a legal research and analysis assistant. Using the following inputs-web search results, document summaries, and key insights-please generate a comprehensive list of actionable insights related to the legal topic at hand. For each item in your list, include any of the following as applicable:
+
+    - Actionable insights or recommendations.
+    - Next steps for further analysis or research.
+    - Identification of any significant deviations or gaps in current practices.
+    - Additional observations or recommendations that might be relevant.
+    - Hyperlinks to the original resources or web search results that support each point.
+    - Any other Significant Observation of Interest
+"""
+
+qna_prompt = """
+You are a legal research and analysis assistant. Using the following inputs—web search results, document summaries, and key insights—generate a numbered list of potential user questions related to the legal topic. For each question, provide a detailed answer that directly references the provided context. Your answers must:
+
+Cite specific incidents or observations from the documents.
+Include clickable hyperlinks to the relevant resources.
+Address actionable insights, next steps, significant deviations, and any other critical aspects highlighted in the documents.
+For example:
+Question: When is anticipatory bail necessary?
+Answer: As observed in the case of XYZ in the ABC document ([link]), the party applied for anticipatory bail when…
+
+Output Format:
+
+Question: [Generated question]
+Answer: [Detailed answer with references]
+Ensure that both your questions and answers are directly relevant to the document content and provide clear, actionable guidance.
+"""
+
 import os
 import json
 import requests
@@ -527,6 +711,41 @@ import time
 import boto3
 from tavily import TavilyClient
 # import html
+from streamlit_cookies_manager import EncryptedCookieManager
+import streamlit_authenticator as stauth
+import matplotlib.pyplot as plt
+import plotly.express as px
+import plotly.graph_objects as go
+
+if "Authenticator" not in st.session_state:
+    st.session_state["Authenticator"] = None
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+if "username" not in st.session_state:
+    st.session_state["username"] = ""
+if "logged_in" not in st.session_state:
+    st.session_state["logged_in"] = False
+if "logged_out" not in st.session_state:
+    st.session_state["logged_out"] = False
+
+
+# Instantiate the Cookie Manager at the very top.
+cookies = EncryptedCookieManager(
+    prefix="nexusdms/",  # Use a unique prefix for your app.
+    password="abcdefgh"
+)
+
+if not cookies.ready():
+    st.spinner("Loading cookies...")
+    st.stop()
+
+def remove_last_line(text):
+    lines = text.splitlines()
+    filtered_lines = [
+        line for line in lines 
+        if 'python' not in line.lower() and 'plotly' not in line.lower() and "code" not in line.lower()
+    ]
+    return "\n".join(filtered_lines)
 
 # Define valid users in a dictionary
 def load_dict_from_json(file_path):
@@ -624,7 +843,7 @@ def upload_to_blob_storage(local_file_path, bucket_name, s3_key):
         with open(local_file_path, "rb") as data:
             s3_client.upload_fileobj(data, bucket_name, s3_key)
 
-        st.success(f"File '{s3_key}' successfully uploaded to S3.")
+        # st.success(f"File '{s3_key}' successfully uploaded to S3.")
     except Exception as e:
         st.error(f"Failed to upload file to S3: {str(e)}")
 
@@ -660,7 +879,7 @@ def call_llm_api(system_message, user_query):
     # Prepare the request payload
     payload = {
         "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 16384,
+        "max_tokens": 4096,
         "messages": [
             {
                 "role": "user",
@@ -698,7 +917,7 @@ def call_gpt_api(system_message, user_query):
     payload = {  
         "messages": messages,  
         "temperature": 0.7,  
-        "max_tokens": 16384   
+        "max_tokens": 4096   
     }
     response = requests.post(url, headers=headers, data=json.dumps(payload))
     response.raise_for_status()  
@@ -878,6 +1097,83 @@ def get_page_range_for_files(selected_files):
     
     return page_ranges
 
+ 
+def query_documents_viz(selected_files, selected_page_ranges, query, top_k, web_search, llm_model):  
+    query_embedding = generate_titan_embeddings(query).reshape(1, -1)
+    if faiss_index.ntotal == 0:
+        st.error("The FAISS index is empty. Please upload a PDF to populate the index.")
+        return [], "No data available to query."
+
+    # Fetch all metadata for the given query
+    k = faiss_index.ntotal  # Initial broad search
+    distances, indices = faiss_index.search(query_embedding, k)
+    
+    filtered_results = []
+    for dist, idx in zip(distances[0], indices[0]):
+        if idx < len(metadata_store):
+            metadata = metadata_store[idx]
+            if metadata['filename'] in selected_files:
+                min_page, max_page = selected_page_ranges.get(metadata['filename'], (None, None))
+                if min_page and max_page and min_page <= metadata['page'] <= max_page:
+                    filtered_results.append((dist, idx))
+    
+    # Limit to topK after filtering
+    top_k_results = sorted(filtered_results, key=lambda x: x[0])[:top_k]
+    top_k_metadata = [metadata_store[idx] for _, idx in top_k_results]
+    
+    # Existing prompt modification
+    # Existing prompt modification
+    query_prompt = f"""  
+    Given the extracted data from the uploaded documents, please respond to the user queries. 
+    # Important: Remember these answers are for the leadership team so any valuable additional insights are always appreciated.
+    # Always provide all necessary details and quote sources when getting yur answers.
+    # Note : If the customer query requires a bar chart or graph, generate the equivalent Python code with all necessary imports 
+    # and ensure the code uses Plotly for interactive graph creation (not Matplotlib).
+    
+    Extracted data from Index (In JSON Formatting): 
+        ```
+        {json.dumps(top_k_metadata)}
+        ```
+    """
+
+    user_query = f"The User Question was: {query} \n\n"
+
+    
+    ws_response = ""
+
+    if web_search:
+        ws_query = query
+        # Call the LLM API to get the answer
+        # To install, run: pip install tavily-python
+
+
+        client = TavilyClient(api_key=TAVILY_API)
+
+        ws_response = client.search(
+            query=ws_query,
+            search_depth="advanced",
+            include_raw_content=True
+        )
+
+        print(ws_response)
+
+        wsp = f"""
+        # Feel free to use the Web Search Results for Additional Context as well:
+
+        {json.dumps(ws_response)}
+        """
+        if llm_model=="Claude 3.5 Sonnet":
+            answer = call_llm_api(query_prompt, user_query+wsp)
+        elif llm_model=="GPT 4o":
+            answer = call_gpt_api(query_prompt, user_query+wsp)
+    else:
+        if llm_model=="Claude 3.5 Sonnet":
+            answer = call_llm_api(query_prompt, user_query)
+        elif llm_model=="GPT 4o":
+            answer = call_gpt_api(query_prompt, user_query)
+
+    return answer
+
 def query_documents_with_page_range(selected_files, selected_page_ranges, prompt, top_k, last_messages, web_search, llm_model):
     # print(selected_files)
     # print(selected_page_ranges)
@@ -903,7 +1199,10 @@ def query_documents_with_page_range(selected_files, selected_page_ranges, prompt
         prompt_op = json.loads(prompts.split("```json")[1].split("```")[0])
     except:
         # return json.loads(answer[3:-3])
-        prompt_op = json.loads(prompts.split("```")[1].split("```")[0])
+        try:
+            prompt_op = json.loads(prompts)
+        except:
+            prompt_op = json.loads(prompts.split("```")[1].split("```")[0])
     print(prompt_op)
     query = prompt_op["semantic_search_prompt"]
 
@@ -1048,8 +1347,142 @@ def final_format(top_k_metadata, answer, ws_response):
     except:
         # return json.loads(answer[3:-3])
         return json.loads(answer.split("```")[1].split("```")[0])
+    
+def summarize_document_pages(filename, start_page, end_page, summary_prompt):
+    """
+    Summarize document pages for a given file using overlapping chunks if needed.
+    Retrieves text from the metadata_store for pages in [start_page, end_page].
+    """
+    # Retrieve texts for the specified file and pages.
+    pages = [metadata for metadata in metadata_store 
+             if metadata['filename'] == filename and start_page <= metadata['page'] <= end_page]
+    # Sort pages by page number.
+    pages = sorted(pages, key=lambda x: x['page'])
+    total_pages = len(pages)
+    full_text = json.dumps(pages) # "\n".join(page["text"] for page in pages)
+
+    # If the selected pages are less than 20, summarize in one go.
+    if total_pages < 50:
+        user_query = f"Summarize the following document text from Document {filename} \n{full_text}"
+        summary = call_llm_api(summary_prompt, user_query)
+        return summary
+
+    # Else, create overlapping chunks.
+    # Define base chunk size and overlap (e.g., 20 pages with 25% overlap => 5 pages)
+    base_chunk_size = 50
+    overlap = int(base_chunk_size * 0.25)  # 5 pages
+
+    # Build chunks using a sliding window approach.
+    chunk_summaries = []
+    i = 0
+    while i < total_pages:
+        # Determine the chunk's pages (ensure we don't exceed total_pages)
+        start_idx = i
+        end_idx = min(i + base_chunk_size, total_pages)
+        chunk_text = json.dumps(pages[j] for j in range(start_idx, end_idx))
+        user_query = f"Summarize the following document from file `{filename}` text:\n{chunk_text}"
+        chunk_summary = call_llm_api(summary_prompt, user_query)
+        chunk_summaries.append(chunk_summary)
+        # Advance by base_chunk_size minus the overlap.
+        i += (base_chunk_size - overlap)
+    
+    # Consolidate the chunk summaries into a final summary.
+    consolidation_prompt = summary_prompt + "\n\nPlease consolidate the following summaries into one overall summary:"
+    consolidation_input = json.dumps(chunk_summaries)
+    final_summary = call_llm_api(consolidation_prompt, consolidation_input)
+    return final_summary
+
+def get_web_recommendations(document_summaries, insights):
+        # print(selected_files)
+    # print(selected_page_ranges)
+    qp_prompt = {
+        "system_message": "You are an intelligent query refiner. Your job is to take the Document Summaries and Key observations (which may contain poor grammar or informal language) and generate a well-formed prompt for web search. The web search prompt should refine the query further to fetch relevant legal resources/ verdicts/ cases/ decisions online. Output only a JSON object with 'web_search_prompt' as key.",
+        "user_query": f"Document Summaries: {json.dumps(document_summaries)}\n\nInsights: {insights}\n\nGenerate the JSON output with the improved prompt."
+    }
+
+    op_format = '''
+    You are an expert legal researcher. Based on the above document summary and key observations, please craft a concise web search query that will help locate similar legal cases and corresponding verdicts. Your output should include:
+
+        Specific legal terms or phrases that capture the core issues.
+        Relevant jurisdiction or court references, if applicable.
+        Any additional keywords that may refine the search (e.g., precedent case names or statutory citations).
+
+    # Output Format:
+    
+    ```json
+    {
+        "web_search_prompt": "Further refined query designed to fetch relevant legal resources/ verdicts/ cases/ decisions from the web."
+    }
+    ```
+    '''
+
+    prompts = call_llm_api(qp_prompt["system_message"], qp_prompt["user_query"]+op_format)
+    print(prompts)
+    try:
+        # return json.loads(answer[7:-3])
+        prompt_op = json.loads(prompts.split("```json")[1].split("```")[0])
+    except:
+        # return json.loads(answer[3:-3])
+        try:
+            prompt_op = json.loads(prompts)
+        except:
+            prompt_op = json.loads(prompts.split("```")[1].split("```")[0])
+    print(prompt_op)
+    ws_query = prompt_op["web_search_prompt"]
+    # Call the LLM API to get the answer
+    # To install, run: pip install tavily-python
+
+
+    client = TavilyClient(api_key=TAVILY_API)
+
+    ws_response = client.search(
+        query=ws_query,
+        search_depth="advanced",
+        include_raw_content=True
+    )
+
+    print(ws_response)
+
+    web_response = call_llm_api(ws_prompt_lib, f"The Document Summaries: {json.dumps(document_summaries)} \n\n The Key Observations: {insights} \n\n The Web Search Results: {json.dumps(ws_response)}")
+    nexus_insights = call_llm_api(insights_prompt_lib, f"The Document Summaries: {json.dumps(document_summaries)} \n\n The Key Observations: {insights} \n\n The Web Search Results: {json.dumps(ws_response)}")
+    faq = call_llm_api(qna_prompt, f"The Document Summaries: {json.dumps(document_summaries)} \n\n The Key Observations: {insights} \n\n The Web Search Results: {json.dumps(ws_response)}")
+    
+    return web_response, nexus_insights, faq
+
+
+
+# Function to handle user input with text_area and predefined prompts
+def user_input():
+    # Dropdown for predefined prompts (add an empty option for no auto-fill)
+    # Optionally, if last_mapping exists, display it automatically:
+    if st.session_state.sources:
+        with st.expander("Show Copyable Answer"):
+            st.code(st.session_state.sources[-1]["answer"])
+
+    prompt_options = list(prompt_library.keys())
+    selected_prompt = st.selectbox("Select a predefined prompt:", prompt_options, index=0)
+    
+    # Auto-fill text area if a prompt is selected
+    default_text = prompt_library[selected_prompt]
+    user_message = st.text_area("Enter your message:", value=default_text, height=150)
+    ol1, ol2, ol3, ol4, ol5, ol6, ol7, ol8 = st.columns(8)
+    with ol8:
+    # Submit button
+       submit = st.button("Send")
+    if submit and user_message.strip():
+        default_text = "custom"
+        st.session_state.user_message = ""  # Clear the text input
+        return user_message.strip()
+    return None
 
 USERS = load_dict_from_json(users_file)
+credentials = {"usernames": {}}
+for user in USERS:
+    # Assume each user has keys: 'username', 'name', and 'password'
+    credentials["usernames"][user] = {
+        "name": user,
+        "password": USERS[user]
+    }
 
 def login():
     display_logo()
@@ -1059,67 +1492,100 @@ def login():
     
     if st.button("Login"):
         if username in USERS and password == USERS[username]:
-            st.session_state.authenticated = True
-            st.session_state.username = username  # Store the logged-in user's name
+            # Mark the user as authenticated
+            st.session_state["authenticated"] = True
+            st.session_state["username"] = username
+            st.session_state["logged_in"] = True
+
+            # Set a persistent cookie
+            cookies["username"] = username
+            cookies.save()
+            
+            # Create the authenticator instance and store it in session state.
+            # (Ensure you have a 'credentials' variable ready.)
+            Authenticator = stauth.Authenticate(credentials, cookie_name='nexusdms/', key='abcdefgh', cookie_expiry_days=0)
+            st.session_state["Authenticator"] = Authenticator
+            
             st.success("Login successful!")
-            st.rerun()
+            # Optionally, you can call st.rerun() here if needed.
         else:
             st.error("Invalid username or password.")
 
 def logout():
-    """Logout function to clear authentication."""
-    if st.sidebar.button("Logout"):
-        st.session_state.authenticated = False
-        st.rerun(),
+    # Retrieve the stored authenticator instance
+    authenticator = st.session_state.get("Authenticator")
+    if authenticator is not None:
+        try:
+            # Attempt logout (this might raise a KeyError if cookie already removed)
+            logout_button = authenticator.logout('Log Out', 'sidebar')
+        except KeyError:
+            logout_button = True  # If cookie already removed, treat as successful logout.
+        except Exception as err:
+            st.error(f'Unexpected exception during logout: {err}')
+            return
+    else:
+        logout_button = True
+
+    if logout_button:
+        # Update session state to reflect logout
+        st.session_state["logged_out"] = True
+        st.session_state["logged_in"] = False
+        st.session_state["authenticated"] = False
+        st.session_state["username"] = ""
+        st.session_state["Authenticator"] = None
+        
+        # Clear the cookie as well.
+        if "username" in cookies:
+            # del cookies["username"]
+            cookies["username"] = ""
+            cookies.save()
+        st.rerun()
 
 def main():
-    if "authenticated" not in st.session_state:
-        st.session_state.authenticated = False
+    # Try to restore authentication from session state or cookie.
+    if not st.session_state["authenticated"]:
+        cookie_username = cookies.get("username")
+        if cookie_username != "" and cookie_username is not None:
+            st.session_state["authenticated"] = True
+            st.session_state["username"] = cookie_username
+            st.session_state["logged_in"] = True
 
-    if not st.session_state.authenticated:
+    if not st.session_state["authenticated"]:
         login()
         return
 
     display_logo()
     st.title("Document Query Assistant")
 
-    # Initialize session state variables
+    # Initialize session state variables if not present.
     if 'messages' not in st.session_state:
         st.session_state.messages = []
-    
     if 'current_conversation' not in st.session_state:
         st.session_state.current_conversation = None
-    
     if 'sources' not in st.session_state:
         st.session_state.sources = []
-
-    # if 'chat_history' not in st.session_state:
-    #     st.session_state.chat_history = []
     if 'chat_history' not in st.session_state:
-            st.session_state.chat_history = load_chat_history()
-
-    # Retrieve the current user’s conversation history:
-    current_user = st.session_state.username
-    conversations = st.session_state.chat_history.get(current_user, [])
-
-    # Call `load_index_and_metadata` during app initialization
+        st.session_state.chat_history = load_chat_history()
+    # Initialize file selection state.
+    if 'selected_files' not in st.session_state:
+        st.session_state.selected_files = []
+    if 'selected_page_ranges' not in st.session_state:
+        st.session_state.selected_page_ranges = {}
+    if 'file_summaries' not in st.session_state:
+        st.session_state.file_summaries = {}
+    
+    current_user = st.session_state["username"]
     load_index_and_metadata()
-    st.sidebar.header(f"Hello {current_user}")
-
-    logout()
+    st.sidebar.header(f"Hello `{current_user}`")
+    if st.sidebar.button("Log Out"):
+        logout()  # Display the logout button in the sidebar
 
     st.sidebar.header("Options")
-
-    option = st.sidebar.selectbox("Choose an option", ["Upload PDF", "Query Documents"])
+    option = st.sidebar.selectbox("Choose an option", ["Query Documents", "Query Advanced", "Upload PDF"])
 
     if option == "Upload PDF":
-        # ... (existing PDF upload code remains the same)
         st.header("Upload PDF Documents")
-        uploaded_files = st.file_uploader(
-            "Upload one or more PDF files",
-            type=["pdf"],
-            accept_multiple_files=True
-        )
+        uploaded_files = st.file_uploader("Upload one or more PDF files", type=["pdf"], accept_multiple_files=True)
         if uploaded_files:
             for uploaded_file in uploaded_files:
                 st.write(f"Processing {uploaded_file.name}...")
@@ -1132,50 +1598,38 @@ def main():
     elif option == "Query Documents":
         st.header("Query Documents")
         st.sidebar.header("Settings")
-
         llm_model = st.sidebar.selectbox("Choose Your Model", ["Claude 3.5 Sonnet", "GPT 4o"])
 
-        # Add "New Chat" button
+        # "New Chat" button resets conversation and state.
         if st.sidebar.button("New Chat"):
-            # Reset current conversation and messages
             st.session_state.current_conversation = None
             st.session_state.messages = []
             st.session_state.sources = []
+            # Clear previous file/page selections too.
+            st.session_state.selected_files = []
+            st.session_state.selected_page_ranges = {}
             st.success("Started a new conversation.")
 
-        
         web_search = st.sidebar.toggle("Enable Web Search")
+        top_k = st.sidebar.slider("Select Top-K Results", min_value=1, max_value=50, value=20, step=1)
 
-        # Sidebar slider for Top-K selection
-        top_k = st.sidebar.slider(
-            "Select Top-K Results",  # Label
-            min_value=1,             # Minimum value
-            max_value=50,            # Maximum value
-            value=20,                # Default value
-            step=1                   # Step size
-        )
-
-        
-
-        # File and Page Range Selection (similar to existing code)
+        # File and Page Range Selection
         available_files = list(set([metadata['filename'] for metadata in metadata_store]))
-
         if available_files:
-            # File selection
-            selected_files = st.multiselect(
-                "Select up to 4 files to include in the query:",
-                available_files
+            # Use multiselect and store the selection in session state.
+            st.session_state.selected_files = st.multiselect(
+                "Select files to include in the query:",
+                available_files,
+                default=st.session_state.selected_files
             )
+            if len(st.session_state.selected_files) > 4:
+                st.warning("For best results, select a maximum of 4 files.")
+                # return
 
-            if len(selected_files) > 4:
-                st.warning("You can select a maximum of 4 files.")
-                return
-
-            # Page range selection
-            page_ranges = get_page_range_for_files(selected_files)
+            page_ranges = get_page_range_for_files(st.session_state.selected_files)
             selected_page_ranges = {}
-
-            for file in selected_files:
+            # For each file, show page range inputs and store values in session state.
+            for file in st.session_state.selected_files:
                 min_page, max_page = page_ranges[file]
                 col1, col2 = st.sidebar.columns(2)
                 with col1:
@@ -1183,186 +1637,355 @@ def main():
                         f"Start page for {file}",
                         min_value=min_page,
                         max_value=max_page,
-                        value=min_page
+                        value=page_ranges[file][0],
+                        key=f"start_{file}"
                     )
                 with col2:
                     end_page = st.number_input(
                         f"End page for {file}",
                         min_value=min_page,
                         max_value=max_page,
-                        value=max_page
+                        value=page_ranges[file][1],
+                        key=f"end_{file}"
                     )
-
                 selected_page_ranges[file] = (start_page, end_page)
+            st.session_state.selected_page_ranges = selected_page_ranges
 
-        # Sidebar Header
+
+        summaries = {}
+        # selected_files = []
+        # At the top of the "Query Advanced" option, display document summaries.
+        if st.session_state.selected_files and st.button("Nekko Insignts"):
+            st.subheader("Document Summaries")
+            # Create columns (one per selected file)
+            # cols = st.columns(len(selected_files))
+            for idx, file in enumerate(st.session_state.selected_files):
+                # Get the page range for the file.
+                min_page, max_page = selected_page_ranges.get(file, (None, None))
+                if min_page is not None and max_page is not None:
+                    # Use the summary prompt as the system message (you may have a variable 'summary_prompt' already defined).
+                    summary = summarize_document_pages(file, min_page, max_page, summary_prompt)
+                    summaries[file] = summary
+                    # with cols[idx]:
+                    st.markdown(f"**{file} (Pages {min_page}-{max_page}) Summary:**")
+                    with st.expander("Click to view"):
+                        st.write(summary)
+            
+            # cols1, cols2 = st.columns(2)
+            st.subheader("Observations and Insights")
+            # with cols1:
+            st.markdown("**Key Observations**")
+            insights = call_llm_api(insights_prompt, json.dumps(summaries))
+            with st.expander("Click to view"):
+                st.write(insights)
+            # with cols2:
+            st.markdown("**Web Search Results**")
+            web_response, nexus_insights, faq = get_web_recommendations(summaries, insights)
+            with st.expander("Click to view"):
+                st.write(web_response)
+
+            # cols3, cols4 = st.columns(2)
+            st.subheader("Nexus Intelligence")
+            # with cols3:
+            st.markdown("**Nexus Intelligent Insights**")
+            with st.expander("Click to view"):
+                st.write(nexus_insights)
+            # with cols4:
+            st.markdown("**Frequently Asked Questions**")
+            with st.expander("Click to view"):
+                st.write(faq)
+
+        # Load previous conversations in sidebar.
         st.sidebar.header("Previous Conversations")
-
-        # Load conversations
-        # conversations = list(load_conversations_from_blob())
-        # In your main() function, after loading the chat history:
-        current_user = st.session_state.username
         user_conversations = st.session_state.chat_history.get(current_user, [])
-
-        # Ensure unique conversations while preserving order
         seen_labels = {}
         unique_conversations = []
-
-        # for conv in conversations:
-        #     conv_label = conv.get('messages', [])[0]["content"]
-            
-        #     if conv_label not in seen_labels:
-        #         seen_labels[conv_label] = conv  # Store the conversation
-        #         unique_conversations.append(conv)
-
         for conv in user_conversations:
-            # Use first message content as a preview label (adjust as needed)
             conv_label = conv.get('messages', [])[0]["content"]
             if conv_label not in seen_labels:
                 seen_labels[conv_label] = conv
                 unique_conversations.append(conv)
-
-        # # Sort by timestamp (if available), latest first
-        # unique_conversations.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
-        # Sort by timestamp (latest first)
         unique_conversations.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
 
-        # Display in the sidebar
-        for idx, conv in enumerate(unique_conversations):
-            conv_label = conv.get('messages', [])[0]["content"][:20]
-            if 'timestamp' in conv:
-                conv_label += f" ({conv['timestamp']})"
-            if st.sidebar.button(conv_label, key=f"conv_{idx}"):
-                st.session_state.current_conversation = conv
-                st.session_state.messages = conv.get('messages', [])
+        # if st.sidebar.toggle("Rename Conversation"):
+        #     for idx, conv in enumerate(unique_conversations):
+        #         # Use the custom label if available, otherwise use a preview of the first message.
+        #         default_label = conv.get("label", conv.get('messages', [{}])[0].get("content", "")[:20])
                 
-                # Restore file and page range selections
-                selected_files = conv.get('files', [])
-                selected_page_ranges = conv.get('page_ranges', {})
+        #         # Create two columns: one for selecting the conversation, one for renaming it.
+        #         col1, col2 = st.sidebar.columns([2, 1])
                 
-                # Reapply file and page range selections
-                st.multiselect(
-                    "Selected Files", 
-                    options=available_files, 
-                    default=selected_files
-                )
+        #         # Column 1: Conversation selection button.
+        #         button_key = f"conv_{idx}_{conv.get('label', '')}"
+        #         if col1.button(default_label, key=f"conv_{idx}"):
+        #             st.session_state.current_conversation = conv
+        #             st.session_state.messages = conv.get('messages', [])
+        #             # Restore file and page range selections to session state.
+        #             st.session_state.selected_files = conv.get('files', [])
+        #             st.session_state.selected_page_ranges = conv.get('page_ranges', {})
+        #             # Display the restored selections.
+        #             st.multiselect("Selected Files", options=available_files, default=st.session_state.selected_files)
+        #             for file, (start, end) in st.session_state.selected_page_ranges.items():
+        #                 st.number_input(f"Start page for {file}", value=start, key=f"restore_start_{file}")
+        #                 st.number_input(f"End page for {file}", value=end, key=f"restore_end_{file}")
                 
-                # Optionally, you can programmatically set the page ranges
-                for file, (start, end) in selected_page_ranges.items():
-                    st.number_input(
-                        f"Start page for {file}", 
-                        value=start, 
-                        key=f"start_{file}"
-                    )
-                    st.number_input(
-                        f"End page for {file}", 
-                        value=end, 
-                        key=f"end_{file}"
-                    )
+        #         # Column 2: Renaming interface.
+        #         new_label = col2.text_input("Rename", value=default_label, key=f"rename_{idx}")
+        #         if col2.button("Save Name", key=f"save_{idx}"):
+        #             # Update the conversation object with the new label.
+        #             conv["label"] = new_label
+        #             user = st.session_state.username
+        #             # Find and update the corresponding conversation in the user's chat history.
+        #             for stored_conv in st.session_state.chat_history.get(user, []):
+        #                 if stored_conv.get("timestamp") == conv.get("timestamp"):
+        #                     stored_conv["label"] = new_label
+        #                     break
+        #             save_chat_history(st.session_state.chat_history)
+        #             st.sidebar.success("Conversation renamed!")
+        # else:
+        #         for idx, conv in enumerate(unique_conversations):
+        #             conv_label = conv.get('messages', [])[0]["content"][:20]
+        #             if 'timestamp' in conv:
+        #                 conv_label += f" ({conv['timestamp']})"
+        #             if st.sidebar.button(conv_label, key=f"conv_{idx}"):
+        #                 st.session_state.current_conversation = conv
+        #                 st.session_state.messages = conv.get('messages', [])
+        #                 # Restore file and page range selections to session state.
+        #                 st.session_state.selected_files = conv.get('files', [])
+        #                 st.session_state.selected_page_ranges = conv.get('page_ranges', {})
+        #                 # Also display the restored selections.
+        #                 st.multiselect("Selected Files", options=available_files, default=st.session_state.selected_files)
+        #                 for file, (start, end) in st.session_state.selected_page_ranges.items():
+        #                     st.number_input(f"Start page for {file}", value=start, key=f"restore_start_{file}")
+        #                     st.number_input(f"End page for {file}", value=end, key=f"restore_end_{file}")
 
-        # Display Current Conversation
+        if st.sidebar.toggle("Rename Conversation"):
+            for idx, conv in enumerate(unique_conversations):
+                # Use the custom label if available; otherwise, use a preview of the first message.
+                default_label = conv.get("label") or conv.get('messages', [{}])[0].get("content", "")[:20]
+                
+                # Create two columns: one for selecting the conversation, one for renaming it.
+                col1, col2 = st.sidebar.columns([2, 1])
+                
+                # Column 1: Conversation selection button.
+                # Use a key that embeds the current label so it updates when renamed.
+                button_key = f"conv_{idx}_{default_label}"
+                if col1.button(default_label, key=button_key):
+                    st.session_state.current_conversation = conv
+                    st.session_state.messages = conv.get('messages', [])
+                    st.session_state.selected_files = conv.get('files', [])
+                    st.session_state.selected_page_ranges = conv.get('page_ranges', {})
+                    # Use a new key for the multiselect so that previous selections are overridden.
+                    new_key = f"selected_files_{conv.get('timestamp', idx)}"
+                    st.session_state.selected_files = st.multiselect(
+                        "Select files to include in the query:",
+                        options=available_files,
+                        default=st.session_state.selected_files,
+                        key=new_key
+                    )
+                    for file, (start, end) in st.session_state.selected_page_ranges.items():
+                        st.number_input(f"Start page for {file}", value=start, key=f"restore_start_{file}")
+                        st.number_input(f"End page for {file}", value=end, key=f"restore_end_{file}")
+                
+                # Column 2: Renaming interface.
+                new_label = col2.text_input("Rename", value=default_label, key=f"rename_{idx}")
+                if col2.button("Save Name", key=f"save_{idx}"):
+                    # Update the conversation object with the new label.
+                    conv["label"] = new_label
+                    user = st.session_state.username
+                    # Update the corresponding conversation in the user's chat history.
+                    if user in st.session_state.chat_history:
+                        for stored_conv in st.session_state.chat_history[user]:
+                            if stored_conv.get("timestamp") == conv.get("timestamp"):
+                                stored_conv["label"] = new_label
+                                break
+                    save_chat_history(st.session_state.chat_history)
+                    st.sidebar.success("Conversation renamed!")
+                    # Force a full rerun so updated labels and keys are used.
+                    st.experimental_rerun()
+        else:
+            for idx, conv in enumerate(unique_conversations):
+                # Use the stored label if available; otherwise, use a preview from the first message.
+                conv_label = conv.get("label") or conv.get('messages', [{}])[0].get("content", "")[:20]
+                if 'timestamp' in conv:
+                    conv_label += f" ({conv['timestamp']})"
+                if st.sidebar.button(conv_label, key=f"conv_{idx}"):
+                    st.session_state.current_conversation = conv
+                    st.session_state.messages = conv.get('messages', [])
+                    # Completely override previous file selections with those from the conversation.
+                    st.session_state.selected_files = conv.get('files', [])
+                    st.session_state.selected_page_ranges = conv.get('page_ranges', {})
+                    # Use a new key to reinitialize the multiselect with the conversation's file selections.
+                    new_key = f"selected_files_{conv.get('timestamp', idx)}"
+                    st.session_state.selected_files = st.multiselect(
+                        "Select files to include in the query:",
+                        options=available_files,
+                        default=st.session_state.selected_files,
+                        key=new_key
+                    )
+                    for file, (start, end) in st.session_state.selected_page_ranges.items():
+                        st.number_input(f"Start page for {file}", value=start, key=f"restore_start_{file}")
+                        st.number_input(f"End page for {file}", value=end, key=f"restore_end_{file}")
+
+
+        # Display current conversation messages.
         for message in st.session_state.messages:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
 
-        # Task Selection
-        task = st.selectbox(
-            "Select a task:",
-            options=list(prompt_library.keys()),
-            index=0
-        )
-
-        # Chat Input
-        if prompt := st.chat_input("Enter your query"):
-            # Add user message to chat history
-            st.session_state.messages.append({
-                "role": "user", 
-                "content": prompt
-            })
-
-            # Display user message
+        # --- New User Input using text_area ---
+        user_message = user_input()
+        if user_message:
+            # Append user message and then process query.
+            st.session_state.messages.append({"role": "user", "content": user_message})
+            # Display the user message.
             with st.chat_message("user"):
-                st.markdown(prompt)
+                st.markdown(user_message)
 
-            if len(st.session_state.messages) >= 5:
-                last_messages = st.session_state.messages[-5:]
-            else:
-                last_messages = st.session_state.messages
+            # Prepare the last few messages for context.
+            last_messages = st.session_state.messages[-5:] if len(st.session_state.messages) >= 5 else st.session_state.messages
 
-            # Process query
             with st.spinner("Searching documents..."):
-                # Use the selected files and page ranges
                 top_k_metadata, answer, ws_response = query_documents_with_page_range(
-                    selected_files, 
-                    selected_page_ranges, 
-                    prompt,
+                    st.session_state.selected_files, 
+                    st.session_state.selected_page_ranges, 
+                    user_message,
                     top_k,
                     last_messages,
                     web_search,
                     llm_model
                 )
-                
                 st.session_state.sources.append({
                     "top_k_metadata": top_k_metadata,
                     "answer": answer,
                     "websearch_metadata": ws_response
                 })
-                
-                # Add assistant response to chat history
-                st.session_state.messages.append({
-                    "role": "assistant", 
-                    "content": answer
-                })
 
-                # Create a one-line version for display (removing newline characters)
-                display_answer = " ".join(answer.splitlines())
+                # Append assistant response.
+                st.session_state.messages.append({"role": "assistant", "content": answer})
 
-                # Display assistant response
                 with st.chat_message("assistant"):
                     st.markdown(answer)
-                # Add an expander for a copy-friendly version
-                with st.expander("Show Copyable Answer"):
-                    # st.code(answer.replace("\n", "\\n"), language="text")  # language can be set to "" if you want plain text formatting
-                    st.code(answer, language="text")
+                # with st.expander("Show Copyable Answer"):
+                #     st.code(answer, language="text")
 
                 ist_timezone = pytz.timezone('Asia/Kolkata')
                 new_conversation = {
                     "timestamp": datetime.now(ist_timezone).strftime("%Y-%m-%d %H:%M:%S"),
                     "messages": st.session_state.messages,
-                    "files": selected_files,
-                    "page_ranges": selected_page_ranges
+                    "files": st.session_state.selected_files,
+                    "page_ranges": st.session_state.selected_page_ranges
                 }
-
-                # Update the chat history dictionary for the current user:
                 user = st.session_state.username
                 if user in st.session_state.chat_history:
                     st.session_state.chat_history[user].append(new_conversation)
                 else:
                     st.session_state.chat_history[user] = [new_conversation]
-
-                # Optional: Limit to a maximum number of conversations per user (e.g., last 10)
+                # Limit to last 10 conversations.
                 if len(st.session_state.chat_history[user]) > 10:
                     st.session_state.chat_history[user] = st.session_state.chat_history[user][-10:]
-
                 save_chat_history(st.session_state.chat_history)
+                st.rerun()
 
-        # Source Mapping Button (Optional)
         if st.button("Show Source Mapping"):
-            if len(st.session_state.sources)>0:
+            if st.session_state.sources:
                 top_k_metadata = st.session_state.sources[-1]["top_k_metadata"]
                 answer = st.session_state.sources[-1]["answer"]
                 ws_query = st.session_state.sources[-1]["websearch_metadata"]
                 with st.spinner("Mapping Source..."):
                     final_answer = final_format(top_k_metadata, answer, ws_query)
                     st.write(final_answer)
-
-                    # Relevant pages
-                    st.subheader("Relevant Pages")
+                    st.subheader("Relevant Pages and Web Pages:")
                     for metadata in top_k_metadata:
                         with st.expander(f"Filename: {metadata['filename']}, Page: {metadata['page']}"):
                             st.write(f"```{metadata['text']}```")
+                    with st.expander("Web Search Results"):
+                        st.json(ws_query)
             else:
                 st.warning("No recent query to map sources for.")
+        
+        # # Optionally, if last_mapping exists, display it automatically:
+        # if st.session_state.sources:
+        #     with st.expander("Show Copyable Answer"):
+        #         st.code(st.session_state.sources[-1]["answer"])
+
+
+    elif option == "Query Advanced":
+        st.header("Query Advanced")
+        st.sidebar.header("Settings")
+        llm_model = st.sidebar.selectbox("Choose Your Model", ["Claude 3.5 Sonnet", "GPT 4o"])
+
+        web_search = st.sidebar.toggle("Enable Web Search")
+        top_k = st.sidebar.slider("Select Top-K Results", min_value=1, max_value=100, value=50, step=1)
+
+        # File and Page Range Selection
+        available_files = list(set([metadata['filename'] for metadata in metadata_store]))
+        if available_files:
+            # Use multiselect and store the selection in session state.
+            st.session_state.selected_files = st.multiselect(
+                "Select files to include in the query:",
+                available_files,
+                default=st.session_state.selected_files
+            )
+            if len(st.session_state.selected_files) > 4:
+                st.warning("For best results, select a maximum of 4 files.")
+                # return
+
+            page_ranges = get_page_range_for_files(st.session_state.selected_files)
+            selected_page_ranges = {}
+            # For each file, show page range inputs and store values in session state.
+            for file in st.session_state.selected_files:
+                min_page, max_page = page_ranges[file]
+                col1, col2 = st.sidebar.columns(2)
+                with col1:
+                    start_page = st.number_input(
+                        f"Start page for {file}",
+                        min_value=min_page,
+                        max_value=max_page,
+                        value=page_ranges[file][0],
+                        key=f"start_{file}"
+                    )
+                with col2:
+                    end_page = st.number_input(
+                        f"End page for {file}",
+                        min_value=min_page,
+                        max_value=max_page,
+                        value=page_ranges[file][1],
+                        key=f"end_{file}"
+                    )
+                selected_page_ranges[file] = (start_page, end_page)
+            st.session_state.selected_page_ranges = selected_page_ranges
+        
+        
+        # Input for the user to ask a question
+        query = st.text_input("Ask a question about the documents (e.g., 'Compare amounts for employee benefits and management')")
+
+        # Add a submit button for the query
+        if st.button("Submit"):
+            # Process the query and display the results
+            if query:
+                result = query_documents_viz(st.session_state.selected_files, selected_page_ranges, query, top_k, web_search, llm_model)
+                # st.session_state.query_history.append(query)  # Append query to the session history
+
+                # Display results or generated Python code
+                if "```python" in result:
+                    graphtext = result.split("```python")[0]
+                    fingrphtext = remove_last_line(graphtext)
+                    st.write(fingrphtext)
+                    code = result.split("```python")[1].split("```")[0]
+                    print(f"<<<{code}<<<")
+                    try:
+                        # Execute and display Plotly chart if generated
+                        exec_globals = {"px": px, "go": go}
+                        exec(code, exec_globals)
+                        if "fig" in exec_globals:
+                            st.plotly_chart(exec_globals["fig"])  # Render the Plotly chart in Streamlit
+                        else:
+                            st.error("No valid Plotly figure was generated in the code.")
+                    except Exception as e:
+                        st.error(f"Error executing code: {e}")
+                else:
+                    st.write(result)
 
     else:
         st.warning("No files available in the index. Please upload PDFs to populate the index.")
