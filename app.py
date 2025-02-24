@@ -438,7 +438,7 @@ prompt_library = {
 
     3. Summarize Arguments:
 
-    Provide a concise summary of the taxpayer’s defense or arguments against each allegation, including procedural or substantive claims.
+    Provide a concise summary of the taxpayer's defense or arguments against each allegation, including procedural or substantive claims.
 
 
 
@@ -680,14 +680,12 @@ You are a legal research and analysis assistant. Using the following inputs-web 
 """
 
 qna_prompt = """
-You are a legal research and analysis assistant. Using the following inputs—web search results, document summaries, and key insights—generate a numbered list of potential user questions related to the legal topic. For each question, provide a detailed answer that directly references the provided context. Your answers must:
+You are a legal research and analysis assistant. Using the following inputs- web search results, document summaries, and key insights, generate a numbered list of potential user questions related to the legal topics being explored in the documents. 
+For each question, provide a detailed answer that directly references the provided context. Your answers must:
 
-Cite specific incidents or observations from the documents.
-Include clickable hyperlinks to the relevant resources.
-Address actionable insights, next steps, significant deviations, and any other critical aspects highlighted in the documents.
-For example:
-Question: When is anticipatory bail necessary?
-Answer: As observed in the case of XYZ in the ABC document ([link]), the party applied for anticipatory bail when…
+ - Cite specific incidents or observations from the documents.
+ - Include clickable hyperlinks to the relevant resources.
+ - Address actionable insights, next steps, significant deviations, and any other critical aspects highlighted in the documents.
 
 Output Format:
 
@@ -1267,6 +1265,7 @@ def query_documents_with_page_range(selected_files, selected_page_ranges, prompt
 
         wsp = f"""
         # Feel free to use the Web Search Results for Additional Context as well:
+        Please ensure your output is concise, well-organized, and each resource hyperlink is clickable. Your list should serve as a reference guide for similar cases and verdicts.
 
         {json.dumps(ws_response)}
         """
