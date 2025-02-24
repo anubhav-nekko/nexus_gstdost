@@ -507,7 +507,8 @@ system_message = """
     - Note: Sometimes Contents of the same entity such as Tables can span over multiple consecutive pages. Your task is to identify the pages in order and consolidate them accordingly from the provided contexts.
     - The contexts you receive are outputs from OCR so expect them to have mistakes. Rely on your Intelligence to make corrections to the text as appropriate when formulating and presenting answers.
     - IMPORTANT: The Law is a Precise Endeavour. Never make up information you do not find in the contexts or provide your opinion on things unless explicitly asked.
-    - TIP: Always provide long and detailed Answers.
+    - TIP: Always provide long and detailed Answers. If there is any Anomaly, deviation or unique observation, make sure to report that as well.
+    - NOTE: If using Web Search Results, Always Cite Web Sources at the end of your answer with necessary clickable hyperlinks.
     - Never use Double Quotes in your Answer. Use Backticks to highlight if necessary.
     """
 
@@ -804,7 +805,7 @@ def save_chat_history(chat_history, blob_name="chat_history.json"):
         with open(local_file_path, "w", encoding="utf-8") as f:
             json.dump(chat_history, f, ensure_ascii=False, indent=2)
         s3_client.upload_file(local_file_path, s3_bucket_name, blob_name)
-        os.remove(local_file_path)
+        # os.remove(local_file_path)
     except Exception as e:
         st.error(f"Failed to save chat history: {str(e)}")
 
@@ -1455,9 +1456,9 @@ def get_web_recommendations(document_summaries, insights):
 def user_input():
     # Dropdown for predefined prompts (add an empty option for no auto-fill)
     # Optionally, if last_mapping exists, display it automatically:
-    if st.session_state.sources:
-        with st.expander("Show Copyable Answer"):
-            st.code(st.session_state.sources[-1]["answer"])
+    # if st.session_state.sources:
+    #     with st.expander("Show Copyable Answer"):
+    #         st.code(st.session_state.sources[-1]["answer"])
 
     prompt_options = list(prompt_library.keys())
     selected_prompt = st.selectbox("Select a predefined prompt:", prompt_options, index=0)
@@ -1611,7 +1612,7 @@ def main():
             st.success("Started a new conversation.")
 
         web_search = st.sidebar.toggle("Enable Web Search")
-        top_k = st.sidebar.slider("Select Top-K Results", min_value=1, max_value=50, value=20, step=1)
+        top_k = st.sidebar.slider("Select Top-K Results", min_value=1, max_value=100, value=50, step=1)
 
         # File and Page Range Selection
         available_files = list(set([metadata['filename'] for metadata in metadata_store]))
@@ -1832,6 +1833,9 @@ def main():
         for message in st.session_state.messages:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
+                with st.expander("Show Copyable Text"):
+                    # st.code provides a copy button by default
+                    st.code(message["content"], language="text")
 
         # --- New User Input using text_area ---
         user_message = user_input()
@@ -1881,9 +1885,9 @@ def main():
                     st.session_state.chat_history[user].append(new_conversation)
                 else:
                     st.session_state.chat_history[user] = [new_conversation]
-                # Limit to last 10 conversations.
-                if len(st.session_state.chat_history[user]) > 10:
-                    st.session_state.chat_history[user] = st.session_state.chat_history[user][-10:]
+                # Limit to last 20 conversations.
+                # if len(st.session_state.chat_history[user]) > 20:
+                #     st.session_state.chat_history[user] = st.session_state.chat_history[user][-20:]
                 save_chat_history(st.session_state.chat_history)
                 st.rerun()
 
