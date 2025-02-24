@@ -11,3 +11,6 @@ streamlit-cookies-manager
 streamlit-authenticator
 matplotlib
 plotly
+pandas
+python-docx
+python-pptx

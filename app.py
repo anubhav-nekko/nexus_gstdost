@@ -715,6 +715,9 @@ import streamlit_authenticator as stauth
 import matplotlib.pyplot as plt
 import plotly.express as px
 import plotly.graph_objects as go
+from docx import Document
+from pptx import Presentation
+import pandas as pd
 
 if "Authenticator" not in st.session_state:
     st.session_state["Authenticator"] = None
@@ -1541,6 +1544,169 @@ def logout():
             cookies.save()
         st.rerun()
 
+def process_pdf(pdf_file):
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_pdf:
+        temp_pdf.write(pdf_file.read())
+        temp_pdf_path = temp_pdf.name
+        
+    pages_text = extract_text_from_pdf(temp_pdf_path)
+    total_pages = len(pages_text)
+    progress_bar = st.progress(0)
+    processing_message_placeholder = st.empty()
+    
+    for page_num, text, page_content in pages_text:
+        processing_message_placeholder.write(f"Processing page {page_num}/{total_pages}...")
+        embedding = generate_titan_embeddings(text)
+        faiss_index.add(embedding.reshape(1, -1))
+        metadata_store.append({
+            "filename": os.path.basename(pdf_file.name),
+            "page": page_num,
+            "text": page_content
+        })
+        progress_bar.progress(page_num / total_pages)
+    
+    save_index_and_metadata()
+    try:
+        blob_name = os.path.basename(pdf_file.name)
+        upload_to_blob_storage(temp_pdf_path, s3_bucket_name, blob_name)
+        os.remove(temp_pdf_path)
+    except PermissionError:
+        st.warning("Could not delete the temporary PDF file. It might still be in use.")
+
+def extract_text_from_image(file_path):
+    # Open image with fitz (PyMuPDF supports image reading too)
+    img_doc = fitz.open(file_path)
+    text_lines = []
+    try:
+        page = img_doc[0]  # Assume the entire image is one "page"
+        pix = page.get_pixmap()
+        temp_image_path = os.path.join(tempfile.gettempdir(), "temp_image.png")
+        pix.save(temp_image_path)
+        with open(temp_image_path, "rb") as image_file:
+            image_bytes = image_file.read()
+        response = textract_client.detect_document_text(Document={'Bytes': image_bytes})
+        for block in response.get('Blocks', []):
+            if block['BlockType'] == 'LINE' and 'Text' in block:
+                text_lines.append(block['Text'])
+        os.remove(temp_image_path)
+    except Exception as e:
+        st.error(f"Error processing image: {str(e)}")
+    return "\n".join(text_lines)
+
+def process_image(image_file):
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as temp_img:
+        temp_img.write(image_file.read())
+        temp_img_path = temp_img.name
+    text = extract_text_from_image(temp_img_path)
+    embedding = generate_titan_embeddings(text)
+    faiss_index.add(embedding.reshape(1, -1))
+    metadata_store.append({
+        "filename": os.path.basename(image_file.name),
+        "page": 1,  # Only one "page" for an image
+        "text": text
+    })
+    save_index_and_metadata()
+    try:
+        blob_name = os.path.basename(image_file.name)
+        upload_to_blob_storage(temp_img_path, s3_bucket_name, blob_name)
+        os.remove(temp_img_path)
+    except PermissionError:
+        st.warning("Could not delete the temporary image file. It might still be in use.")
+
+def process_docx(docx_file):
+    # Save file locally
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as temp_docx:
+        temp_docx.write(docx_file.read())
+        temp_docx_path = temp_docx.name
+
+    try:
+        doc = Document(temp_docx_path)
+        # If page information is not available, you can split the document into chunks by paragraphs.
+        full_text = "\n".join([para.text for para in doc.paragraphs if para.text.strip() != ""])
+        # Optional: use a heuristic to approximate pages (e.g., split full_text into equal parts)
+        chunks = [full_text[i:i+1000] for i in range(0, len(full_text), 1000)]
+        for idx, chunk in enumerate(chunks, 1):
+            embedding = generate_titan_embeddings(chunk)
+            faiss_index.add(embedding.reshape(1, -1))
+            metadata_store.append({
+                "filename": os.path.basename(docx_file.name),
+                "page": idx,
+                "text": chunk
+            })
+    except Exception as e:
+        st.error(f"Error processing DOCX: {str(e)}")
+    finally:
+        os.remove(temp_docx_path)
+    save_index_and_metadata()
+
+def process_pptx(pptx_file):
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pptx") as temp_pptx:
+        temp_pptx.write(pptx_file.read())
+        temp_pptx_path = temp_pptx.name
+    try:
+        prs = Presentation(temp_pptx_path)
+        for idx, slide in enumerate(prs.slides, 1):
+            slide_text = "\n".join([shape.text for shape in slide.shapes if hasattr(shape, "text")])
+            embedding = generate_titan_embeddings(slide_text)
+            faiss_index.add(embedding.reshape(1, -1))
+            metadata_store.append({
+                "filename": os.path.basename(pptx_file.name),
+                "page": idx,  # Slide number
+                "text": slide_text
+            })
+    except Exception as e:
+        st.error(f"Error processing PPTX: {str(e)}")
+    finally:
+        os.remove(temp_pptx_path)
+    save_index_and_metadata()
+
+def process_spreadsheet(file_obj):
+    ext = os.path.splitext(file_obj.name)[1].lower()
+    # Read file using pandas (for CSV, use pd.read_csv; for Excel, pd.read_excel)
+    try:
+        if ext == ".csv":
+            df = pd.read_csv(file_obj)
+            sheet_name = "csv"
+        else:
+            # For Excel, read all sheets or default to the first sheet
+            xls = pd.ExcelFile(file_obj)
+            sheet_name = xls.sheet_names[0]
+            df = pd.read_excel(xls, sheet_name=sheet_name)
+    except Exception as e:
+        st.error(f"Error reading spreadsheet: {str(e)}")
+        return
+
+    # Split dataframe into chunks of 50 rows
+    chunk_size = 50
+    num_chunks = (len(df) // chunk_size) + int(len(df) % chunk_size != 0)
+    for i in range(num_chunks):
+        chunk_df = df.iloc[i*chunk_size : (i+1)*chunk_size]
+        chunk_text = chunk_df.to_string(index=False)
+        embedding = generate_titan_embeddings(chunk_text)
+        faiss_index.add(embedding.reshape(1, -1))
+        metadata_store.append({
+            "filename": f"{os.path.basename(file_obj.name)} ({sheet_name})",
+            "page": f"chunk_{i+1}",
+            "text": chunk_text
+        })
+    save_index_and_metadata()
+
+def add_file_to_index(uploaded_file):
+    ext = os.path.splitext(uploaded_file.name)[1].lower()
+    
+    if ext == ".pdf":
+        process_pdf(uploaded_file)
+    elif ext in [".jpg", ".jpeg", ".png"]:
+        process_image(uploaded_file)
+    elif ext in [".doc", ".docx"]:
+        process_docx(uploaded_file)
+    elif ext == ".pptx":
+        process_pptx(uploaded_file)
+    elif ext in [".xlsx", ".csv"]:
+        process_spreadsheet(uploaded_file)
+    else:
+        st.error(f"Unsupported file type: {ext}")
+
 def main():
     # Try to restore authentication from session state or cookie.
     if not st.session_state["authenticated"]:
@@ -1585,15 +1751,21 @@ def main():
 
     if option == "Upload PDF":
         st.header("Upload PDF Documents")
-        uploaded_files = st.file_uploader("Upload one or more PDF files", type=["pdf"], accept_multiple_files=True)
+        uploaded_files = st.file_uploader(
+            "Upload one or more documents",
+            type=["pdf", "jpg", "jpeg", "png", "doc", "docx", "pptx", "xlsx", "csv"],
+            accept_multiple_files=True
+        )
+
         if uploaded_files:
             for uploaded_file in uploaded_files:
                 st.write(f"Processing {uploaded_file.name}...")
                 if file_exists_in_blob(uploaded_file.name):
-                    st.warning(f"File '{uploaded_file.name}' already exists in Blob Storage. Skipping upload.")
+                    st.warning(f"File '{uploaded_file.name}' already exists in Storage. Skipping upload.")
                 else:
-                    add_pdf_to_index(uploaded_file)
+                    add_file_to_index(uploaded_file)
                     st.success(f"File '{uploaded_file.name}' has been successfully uploaded and added to the index.")
+
 
     elif option == "Query Documents":
         st.header("Query Documents")
