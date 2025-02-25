@@ -1662,21 +1662,19 @@ def process_pptx(pptx_file):
 
 def process_spreadsheet(file_obj):
     ext = os.path.splitext(file_obj.name)[1].lower()
-    # Read file using pandas (for CSV, use pd.read_csv; for Excel, pd.read_excel)
     try:
         if ext == ".csv":
             df = pd.read_csv(file_obj)
             sheet_name = "csv"
         else:
-            # For Excel, read all sheets or default to the first sheet
             xls = pd.ExcelFile(file_obj)
+            # Process all sheets or just the first one; here we use the first sheet
             sheet_name = xls.sheet_names[0]
             df = pd.read_excel(xls, sheet_name=sheet_name)
     except Exception as e:
         st.error(f"Error reading spreadsheet: {str(e)}")
         return
 
-    # Split dataframe into chunks of 50 rows
     chunk_size = 50
     num_chunks = (len(df) // chunk_size) + int(len(df) % chunk_size != 0)
     for i in range(num_chunks):
@@ -1686,7 +1684,7 @@ def process_spreadsheet(file_obj):
         faiss_index.add(embedding.reshape(1, -1))
         metadata_store.append({
             "filename": f"{os.path.basename(file_obj.name)} ({sheet_name})",
-            "page": f"chunk_{i+1}",
+            "page": i + 1,  # Store as an integer instead of "chunk_{i+1}"
             "text": chunk_text
         })
     save_index_and_metadata()
