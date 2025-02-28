@@ -770,6 +770,7 @@ REGION = SECRETS["REGION"]
 GPT_ENDPOINT = SECRETS["GPT_ENDPOINT"]
 GPT_API = SECRETS["GPT_API"]
 TAVILY_API = SECRETS["TAVILY_API"]
+WHATSAPP_TOKEN = SECRETS["WHATSAPP_TOKEN"]
 
 # Paths for saving index and metadata
 FAISS_INDEX_PATH = SECRETS["FAISS_INDEX_PATH"]
@@ -1498,7 +1499,7 @@ def send_whatsapp_message(recipient, message_text):
     url = "https://graph.facebook.com/v20.0/472581919270525/messages"
     headers = {
         "Content-Type": "application/json",
-        "Authorization": "Bearer EAAMm2wb2U18BO9DsRis6VG28XT835zR0aIl8ZCdZCzP0479MyuxEd9DZAZAaIs8xSLAk8myI3QQTBdQZBXm9t4WYgZAL2Re8yXN3u2ZBJZAfzpCyn85FZCxyivQmkhZAfYTwfbjLEZAlgA1YKDZCYj8ZCC9UoYQYnIwrash1LjMXMpSl2h4CAlP5KFEmI5hhd76G5XPTHdwZDZD"  # Replace with your actual API key
+        "Authorization": WHATSAPP_TOKEN
     }
     data = {
         "messaging_product": "whatsapp",
