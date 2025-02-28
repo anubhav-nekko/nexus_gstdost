@@ -771,6 +771,8 @@ GPT_ENDPOINT = SECRETS["GPT_ENDPOINT"]
 GPT_API = SECRETS["GPT_API"]
 TAVILY_API = SECRETS["TAVILY_API"]
 WHATSAPP_TOKEN = SECRETS["WHATSAPP_TOKEN"]
+EMAIL_ID = SECRETS["EMAIL_ID"]
+EMAIL_PWD = SECRETS["EMAIL_PWD"]
 
 # Paths for saving index and metadata
 FAISS_INDEX_PATH = SECRETS["FAISS_INDEX_PATH"]
@@ -1528,8 +1530,8 @@ def send_email(subject, body, recipient):
         from email.mime.multipart import MIMEMultipart
         from email.mime.text import MIMEText
 
-        EMAIL_ADDRESS = "ai@gstdost.com"  # Replace with your sender email
-        EMAIL_PASSWORD = "Dost@2024"  # Replace with your app password
+        EMAIL_ADDRESS = EMAIL_ID  # Replace with your sender email
+        EMAIL_PASSWORD = EMAIL_PWD  # Replace with your app password
 
         msg = MIMEMultipart()
         msg['From'] = EMAIL_ADDRESS
