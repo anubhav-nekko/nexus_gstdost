@@ -2158,7 +2158,7 @@ def main():
                             email_addresses.extend(new_emails)
                         email_results = {}
                         for email_addr in email_addresses:
-                            email_results[email_addr] = send_email("Shared Chat Message", message["content"], email_addr)
+                            email_results[email_addr] = send_email(f"NEXUS DMS Shared Chat Message from {current_user}", message["content"], email_addr)
                         
                         st.write("**WhatsApp Sharing Results:**", whatsapp_results)
                         st.write("**Email Sharing Results:**", email_results)
