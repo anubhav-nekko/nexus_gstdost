@@ -1847,10 +1847,10 @@ def main():
         logout()  # Display the logout button in the sidebar
 
     st.sidebar.header("Options")
-    option = st.sidebar.selectbox("Choose an option", ["Query Documents", "Query Advanced", "Taskmeister", "Upload PDF"])
+    option = st.sidebar.selectbox("Choose an option", ["Query Documents", "Query Advanced", "Taskmeister", "Upload Documents"])
 
-    if option == "Upload PDF":
-        st.header("Upload PDF Documents")
+    if option == "Upload Documents":
+        st.header("Upload Documents")
         uploaded_files = st.file_uploader(
             "Upload one or more documents",
             type=["pdf", "jpg", "jpeg", "png", "doc", "docx", "pptx", "xlsx", "csv"],
@@ -2149,7 +2149,7 @@ def main():
                             whatsapp_numbers.extend(new_nums)
                         whatsapp_results = {}
                         for number in whatsapp_numbers:
-                            whatsapp_results[number] = send_whatsapp_message(number, current_user + "\n" + message["content"])
+                            whatsapp_results[number] = send_whatsapp_message(number, f" *{current_user}*  " + message["content"])
                         
                         # Combine Email addresses from selected contacts and new entries
                         email_addresses = [email_contacts[name] for name in selected_email]
@@ -2412,7 +2412,7 @@ def main():
             st.write("**Email Sharing Results:**", email_results)
 
     else:
-        st.warning("No files available in the index. Please upload PDFs to populate the index.")
+        st.warning("No files available in the index. Please upload Documents to populate the index.")
 
 if __name__ == "__main__":
     main()
