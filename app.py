@@ -696,6 +696,7 @@ Ensure that both your questions and answers are directly relevant to the documen
 
 import os
 import json
+import re
 import requests
 import tempfile
 import pickle
@@ -1452,7 +1453,105 @@ def get_web_recommendations(document_summaries, insights):
     
     return web_response, nexus_insights, faq
 
+# # Load WhatsApp (mobile) contacts from JSON file
+# def load_whatsapp_contacts():
+#     try:
+#         with open("mobile_contacts.json", "r") as f:
+#             contacts = json.load(f)
+#         return contacts  # Expected format: {"Alice": "+1234567890", "Bob": "+1987654321"}
+#     except Exception as e:
+#         st.error(f"Error loading mobile contacts: {e}")
+#         return {}
 
+# # Load email contacts from JSON file
+# def load_email_contacts():
+#     try:
+#         with open("email_contacts.json", "r") as f:
+#             contacts = json.load(f)
+#         return contacts  # Expected format: {"Charlie": "charlie@example.com", "Dana": "dana@example.com"}
+#     except Exception as e:
+#         st.error(f"Error loading email contacts: {e}")
+#         return {}
+
+# Function to generate post text (placeholder; replace with your actual API call)
+def generate_post_text(task_type, template_instructions, description):
+    prompt = f"Task Type: {task_type}\nTemplate: {template_instructions}\nDescription: {description}\nGenerate a creative post:"
+    # Dummy response for now:
+    return f"Generated post text based on: {description}"
+
+# Function to generate an image from text (placeholder; replace with your text-to-image function)
+def generate_post_image(post_text):
+    # Dummy image URL (replace with your function that returns a path or URL)
+    return "https://via.placeholder.com/400.png?text=Generated+Image"
+
+def sanitize_text(message_text):
+    # Remove newline and tab characters
+    sanitized = re.sub(r'[\n\t]', ' ', message_text)
+    # Replace four or more consecutive spaces with a single space
+    sanitized = re.sub(r' {4,}', ' ', sanitized)
+    return sanitized.strip()
+
+# WhatsApp sharing function (placeholder; replace with your actual API implementation)
+def send_whatsapp_message(recipient, message_text):
+    message_text = sanitize_text(message_text)
+
+    url = "https://graph.facebook.com/v20.0/472581919270525/messages"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer EAAMm2wb2U18BO9DsRis6VG28XT835zR0aIl8ZCdZCzP0479MyuxEd9DZAZAaIs8xSLAk8myI3QQTBdQZBXm9t4WYgZAL2Re8yXN3u2ZBJZAfzpCyn85FZCxyivQmkhZAfYTwfbjLEZAlgA1YKDZCYj8ZCC9UoYQYnIwrash1LjMXMpSl2h4CAlP5KFEmI5hhd76G5XPTHdwZDZD"  # Replace with your actual API key
+    }
+    data = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": recipient,
+        "type": "template",
+        "template": {
+            "name": "mytesttemplate",
+            "language": {"code": "en_us"},
+            "components": [
+                {"type": "body", "parameters": [{"type": "text", "text": message_text}]}
+            ]
+        }
+    }
+    response = requests.post(url, headers=headers, json=data)
+    return response.json()
+
+# # Example usage
+# response = send_whatsapp_message("919123987556", "Avi")
+# print(response)
+
+# Email sending function from email.py (adjust if needed)
+def send_email(subject, body, recipient):
+    try:
+        import smtplib
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+
+        EMAIL_ADDRESS = "ai@gstdost.com"  # Replace with your sender email
+        EMAIL_PASSWORD = "Dost@2024"  # Replace with your app password
+
+        msg = MIMEMultipart()
+        msg['From'] = EMAIL_ADDRESS
+        msg['To'] = recipient
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'plain'))
+
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+            server.send_message(msg)
+        return {"status": "sent"}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+# --- Helper functions to load contacts ---
+
+def load_whatsapp_contacts():
+    # Replace with code to load from a JSON file if needed
+    return {"Anubhav": "919874454959", "Prithviraj": "917980757702", "Vikash Dhanania": "919830151208", "Sumit Singh": "919804129766"}
+
+def load_email_contacts():
+    # Replace with code to load from a JSON file if needed
+    return {"Anubhav": "anubhav@nekko.tech", "Prithviraj": "prithvi@nekko.tech"}
 
 # Function to handle user input with text_area and predefined prompts
 def user_input():
@@ -1745,7 +1844,7 @@ def main():
         logout()  # Display the logout button in the sidebar
 
     st.sidebar.header("Options")
-    option = st.sidebar.selectbox("Choose an option", ["Query Documents", "Query Advanced", "Upload PDF"])
+    option = st.sidebar.selectbox("Choose an option", ["Query Documents", "Query Advanced", "Taskmeister", "Upload PDF"])
 
     if option == "Upload PDF":
         st.header("Upload PDF Documents")
@@ -1998,13 +2097,68 @@ def main():
                         st.number_input(f"End page for {file}", value=end, key=f"restore_end_{file}")
 
 
-        # Display current conversation messages.
-        for message in st.session_state.messages:
+        # # Display current conversation messages.
+        # for message in st.session_state.messages:
+        #     with st.chat_message(message["role"]):
+        #         st.markdown(message["content"])
+        #         with st.expander("Show Copyable Text"):
+        #             # st.code provides a copy button by default
+        #             st.code(message["content"], language="text")
+
+        # --- Ensure required session state keys exist ---
+        if "share_message" not in st.session_state:
+            st.session_state.share_message = ""
+
+        # --- Display chat messages with share options ---
+        for idx, message in enumerate(st.session_state.messages):
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
                 with st.expander("Show Copyable Text"):
-                    # st.code provides a copy button by default
                     st.code(message["content"], language="text")
+                with st.expander("Share Message"):
+                    st.write("### Share via WhatsApp")
+                    whatsapp_contacts = load_whatsapp_contacts()
+                    selected_whatsapp = st.multiselect(
+                        "Choose WhatsApp Contacts:",
+                        options=list(whatsapp_contacts.keys()),
+                        key=f"whatsapp_select_{idx}"
+                    )
+                    new_whatsapp_numbers = st.text_input(
+                        "Or add new WhatsApp numbers (comma-separated):",
+                        key=f"whatsapp_new_{idx}"
+                    )
+                    st.write("### Share via Email")
+                    email_contacts = load_email_contacts()
+                    selected_email = st.multiselect(
+                        "Choose Email Contacts:",
+                        options=list(email_contacts.keys()),
+                        key=f"email_select_{idx}"
+                    )
+                    new_email_addresses = st.text_input(
+                        "Or add new Email addresses (comma-separated):",
+                        key=f"email_new_{idx}"
+                    )
+                    if st.button("Share Message", key=f"share_button_{idx}"):
+                        # Combine WhatsApp numbers from selected contacts and new entries
+                        whatsapp_numbers = [whatsapp_contacts[name] for name in selected_whatsapp]
+                        if new_whatsapp_numbers:
+                            new_nums = [num.strip() for num in new_whatsapp_numbers.split(",") if num.strip()]
+                            whatsapp_numbers.extend(new_nums)
+                        whatsapp_results = {}
+                        for number in whatsapp_numbers:
+                            whatsapp_results[number] = send_whatsapp_message(number, current_user + "\n" + message["content"])
+                        
+                        # Combine Email addresses from selected contacts and new entries
+                        email_addresses = [email_contacts[name] for name in selected_email]
+                        if new_email_addresses:
+                            new_emails = [email.strip() for email in new_email_addresses.split(",") if email.strip()]
+                            email_addresses.extend(new_emails)
+                        email_results = {}
+                        for email_addr in email_addresses:
+                            email_results[email_addr] = send_email("Shared Chat Message", message["content"], email_addr)
+                        
+                        st.write("**WhatsApp Sharing Results:**", whatsapp_results)
+                        st.write("**Email Sharing Results:**", email_results)
 
         # --- New User Input using text_area ---
         user_message = user_input()
@@ -2159,6 +2313,100 @@ def main():
                         st.error(f"Error executing code: {e}")
                 else:
                     st.write(result)
+
+    elif option == "Taskmeister":
+        st.title("📌 TaskMeister: Create & Share Posts")
+
+        # Step 1: Task Type Selection
+        task_types = ["Social Media Post", "Marketing Campaign", "Advertisement"]
+        task_type = st.selectbox("Select Task Type", task_types)
+
+        # Step 2: Template Selection
+        templates = {
+            "WhatsApp Share": "Create a short, engaging post for WhatsApp.",
+            "LinkedIn Post": "Draft a professional LinkedIn post.",
+            "New Product Launch": "Announce a new product with key features."
+        }
+        template_choice = st.selectbox("Select a Template", list(templates.keys()))
+        template_instructions = templates[template_choice]
+
+        # Step 3: Post Description Input
+        description = st.text_area("Describe the content for your post", height=150)
+
+        # Step 4: Generate Post Text
+        if st.button("Generate Post Text"):
+            st.session_state.generated_text = generate_post_text(task_type, template_instructions, description)
+            st.success("✅ Post text generated!")
+
+        # Display generated text and allow regeneration
+        if "generated_text" in st.session_state:
+            st.subheader("Generated Post Text")
+            st.write(st.session_state.generated_text)
+            if st.button("Regenerate Text"):
+                st.session_state.generated_text = generate_post_text(task_type, template_instructions, description)
+                st.success("🔄 Post text regenerated!")
+
+        # Step 5: Generate Post Image
+        if st.button("Generate Post Image"):
+            st.session_state.generated_image = generate_post_image(st.session_state.get("generated_text", ""))
+            st.success("🖼️ Image generated!")
+
+        # Display generated image and allow regeneration
+        if "generated_image" in st.session_state:
+            st.subheader("Generated Post Image")
+            st.image(st.session_state.generated_image, use_column_width=True)
+            if st.button("Regenerate Image"):
+                st.session_state.generated_image = generate_post_image(st.session_state.get("generated_text", ""))
+                st.success("🔄 Image regenerated!")
+
+        # Step 6: Sharing Options
+        st.subheader("📤 Share Your Post")
+
+        # WhatsApp Sharing Section
+        st.write("### 📲 Share via WhatsApp")
+        whatsapp_contacts = load_whatsapp_contacts()
+        selected_whatsapp = st.multiselect(
+            "Choose WhatsApp Contacts:",
+            options=list(whatsapp_contacts.keys()),
+            key="whatsapp_select"
+        )
+        new_whatsapp_numbers = st.text_input("Or add new WhatsApp numbers (comma-separated):", key="whatsapp_new")
+
+        # Email Sharing Section
+        st.write("### 📧 Share via Email")
+        email_contacts = load_email_contacts()
+        selected_email = st.multiselect(
+            "Choose Email Contacts:",
+            options=list(email_contacts.keys()),
+            key="email_select"
+        )
+        new_email_addresses = st.text_input("Or add new Email addresses (comma-separated):", key="email_new")
+
+        # Step 7: Share Button
+        if st.button("🚀 Share Post"):
+            post_text = st.session_state.get("generated_text", "")
+            # For now, we are not attaching the image, but you could include the image URL if needed.
+            
+            # Process WhatsApp contacts
+            whatsapp_numbers = [whatsapp_contacts[name] for name in selected_whatsapp]
+            if new_whatsapp_numbers:
+                new_nums = [num.strip() for num in new_whatsapp_numbers.split(",") if num.strip()]
+                whatsapp_numbers.extend(new_nums)
+            whatsapp_results = {}
+            for number in whatsapp_numbers:
+                whatsapp_results[number] = send_whatsapp_message(number, post_text)
+            
+            # Process Email contacts
+            email_addresses = [email_contacts[name] for name in selected_email]
+            if new_email_addresses:
+                new_emails = [email.strip() for email in new_email_addresses.split(",") if email.strip()]
+                email_addresses.extend(new_emails)
+            email_results = {}
+            for email_addr in email_addresses:
+                email_results[email_addr] = send_email("Task Master Post", post_text, email_addr)
+            
+            st.write("**WhatsApp Sharing Results:**", whatsapp_results)
+            st.write("**Email Sharing Results:**", email_results)
 
     else:
         st.warning("No files available in the index. Please upload PDFs to populate the index.")
