@@ -2236,6 +2236,7 @@ def main():
             st.session_state.share_message = ""
 
         # --- Display chat messages with share options ---
+        # --- Display chat messages with share options ---
         for idx, message in enumerate(st.session_state.messages):
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
@@ -2285,14 +2286,16 @@ def main():
                         
                         st.write("**WhatsApp Sharing Results:**", whatsapp_results)
                         st.write("**Email Sharing Results:**", email_results)
+                
                 # New expander for downloading the answer as a Word document
                 with st.expander("Download as Word Document"):
                     word_buffer = create_word_doc(message["content"])
                     st.download_button(
                         label="Download Answer",
                         data=word_buffer,
-                        file_name="Answer.docx",
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        file_name=f"Answer_{idx}.docx",  # Unique file name per message
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        key=f"download_button_{idx}"  # Unique key per download button
                     )
 
 
