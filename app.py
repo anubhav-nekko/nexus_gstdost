@@ -705,7 +705,7 @@ import faiss
 import streamlit as st
 from sentence_transformers import SentenceTransformer
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 import time
 import boto3
@@ -719,6 +719,8 @@ import plotly.graph_objects as go
 from docx import Document
 from pptx import Presentation
 import pandas as pd
+from azure.storage.blob import BlobServiceClient
+import io
 
 if "Authenticator" not in st.session_state:
     st.session_state["Authenticator"] = None
@@ -781,6 +783,10 @@ METADATA_STORE_PATH = SECRETS["METADATA_STORE_PATH"]
 # AWS S3 setup
 s3_bucket_name = SECRETS["s3_bucket_name"]
 
+# Azure Blob Storage setup
+connection_string = SECRETS["connection_string"]
+s3_bucket_name = SECRETS["container_name"]
+
 # Users File Path 
 users_file = "../users.json"
 
@@ -813,6 +819,19 @@ def save_chat_history(chat_history, blob_name="chat_history.json"):
         # os.remove(local_file_path)
     except Exception as e:
         st.error(f"Failed to save chat history: {str(e)}")
+    # try:
+    #     local_file_path = "chat_history.json"
+    #     # Write chat history to a local file
+    #     with open(local_file_path, "w", encoding="utf-8") as f:
+    #         json.dump(chat_history, f, ensure_ascii=False, indent=2)
+        
+    #     # Upload the file to Blob Storage using the helper function
+    #     upload_to_blob_storage(local_file_path, s3_bucket_name, blob_name)
+        
+    #     # Optionally: remove the local file if desired
+    #     # os.remove(local_file_path)
+    # except Exception as e:
+    #     st.error(f"Failed to save chat history: {str(e)}")
 
 def load_chat_history(blob_name="chat_history.json"):
     try:
@@ -830,6 +849,23 @@ def load_chat_history(blob_name="chat_history.json"):
     except Exception as e:
         st.error(f"Failed to load chat history: {str(e)}")
         return {}
+    # try:
+    #     # Check if the blob (file) exists in Azure Blob Storage.
+    #     if file_exists_in_blob(blob_name):
+    #         local_file_path = "chat_history.json"
+    #         # Attempt to download the blob to a local file.
+    #         if download_from_blob_storage(s3_bucket_name, blob_name, local_file_path):
+    #             with open(local_file_path, encoding="utf-8") as file:
+    #                 chat_history = json.load(file)
+    #             # Ensure the loaded JSON is a dictionary.
+    #             if not isinstance(chat_history, dict):
+    #                 chat_history = {}
+    #             return chat_history
+    #     # If the file doesn't exist or download failed, return an empty dict.
+    #     return {}
+    # except Exception as e:
+    #     st.error(f"Failed to load chat history: {str(e)}")
+    #     return {}
 
 
 def file_exists_in_blob(file_name):
@@ -842,6 +878,16 @@ def file_exists_in_blob(file_name):
             return False
         else:
             raise e  # Re-raise other exceptions
+    # """Check if a file with the same name exists in Azure Blob Storage."""
+    # # Initialize BlobServiceClient
+    # blob_service_client = BlobServiceClient.from_connection_string(connection_string)
+    # container_client = blob_service_client.get_container_client(s3_bucket_name)
+
+    # # Get the list of blobs in the container
+    # blob_list = [blob.name for blob in container_client.list_blobs()]
+
+    # # Check if the file name exists in the blob list
+    # return file_name in blob_list
 
 # Function to upload file to Azure Blob Storage
 def upload_to_blob_storage(local_file_path, bucket_name, s3_key):
@@ -852,6 +898,16 @@ def upload_to_blob_storage(local_file_path, bucket_name, s3_key):
         # st.success(f"File '{s3_key}' successfully uploaded to S3.")
     except Exception as e:
         st.error(f"Failed to upload file to S3: {str(e)}")
+    # try:
+    #     blob_service_client = BlobServiceClient.from_connection_string(connection_string)
+    #     blob_client = blob_service_client.get_blob_client(container=bucket_name, blob=s3_key)
+
+    #     with open(local_file_path, "rb") as data:
+    #         blob_client.upload_blob(data, overwrite=True)
+
+    #     st.success(f"File '{s3_key}' successfully uploaded to Blob Storage.")
+    # except Exception as e:
+    #     st.error(f"Failed to upload file to Blob Storage: {str(e)}")
 
 # Function to download file from Azure Blob Storage
 def download_from_blob_storage(s3_bucket_name, s3_key, local_file_path):
@@ -867,6 +923,25 @@ def download_from_blob_storage(s3_bucket_name, s3_key, local_file_path):
         else:
             print(f"Failed to download {s3_key}: {str(e)}")
             return False
+    # try:
+    #     blob_service_client = BlobServiceClient.from_connection_string(connection_string)
+    #     blob_client = blob_service_client.get_blob_client(container=s3_bucket_name, blob=s3_key)
+
+    #     with open(local_file_path, "wb") as file:
+    #         file.write(blob_client.download_blob().readall())
+    #     return True
+    # except Exception as e:
+    #     print(f"Failed to download {s3_key}: {str(e)}")
+    #     return False
+
+def create_word_doc(text):
+    doc = Document()
+    doc.add_heading("Chat Answer", level=1)
+    doc.add_paragraph(text)
+    buffer = io.BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    return buffer
 
 # Function to Generate titan embeddings
 def generate_titan_embeddings(text):
@@ -1180,9 +1255,10 @@ def query_documents_viz(selected_files, selected_page_ranges, query, top_k, web_
 
     return answer
 
-def query_documents_with_page_range(selected_files, selected_page_ranges, prompt, top_k, last_messages, web_search, llm_model):
+def query_documents_with_page_range(selected_files, selected_page_ranges, prompt, top_k, last_messages, web_search, llm_model, draft_mode, analyse_mode):
     # print(selected_files)
     # print(selected_page_ranges)
+
     qp_prompt = {
         "system_message": "You are an intelligent query refiner. Your job is to take a user's original query (which may contain poor grammar or informal language) along with the last 5 messages of the conversation and generate two well-formed prompts: one for a semantic search over a FAISS index and another for a web search. The semantic search prompt should improve the user's provided query, incorporating the last 5 messages for better contextual understanding. The web search prompt should refine the query further to fetch relevant legal resources online. Output only a JSON object with 'semantic_search_prompt' and 'web_search_prompt' as keys.",
         "user_query": f"User Query: {prompt}\n\nLast 5 Messages: {last_messages}\n\nGenerate the JSON output with the two improved prompts."
@@ -1233,6 +1309,50 @@ def query_documents_with_page_range(selected_files, selected_page_ranges, prompt
     # Limit to topK after filtering
     top_k_results = sorted(filtered_results, key=lambda x: x[0])[:top_k]
     top_k_metadata = [metadata_store[idx] for _, idx in top_k_results]
+
+    if analyse_mode:
+        summaries = []
+        for idx, file in enumerate(selected_files):
+                # Get the page range for the file.
+                min_page, max_page = selected_page_ranges.get(file, (None, None))
+                if min_page is not None and max_page is not None:
+                    # Use the summary prompt as the system message (you may have a variable 'summary_prompt' already defined).
+                    summary = summarize_document_pages(file, min_page, max_page, summary_prompt)
+                    summaries.append({file: summary})
+                    # with cols[idx]:
+        top_k_metadata = summaries
+
+    if draft_mode:
+        sys_msg = (
+            "You are a Helpful Legal Data Analyst specializing in legal document analysis. "
+            "Your task is to help draft a document based on the user ask, document text, and the last 5 messages provided for context "
+            "First, generate a bullet list of key topics. Then, for each topic, elaborate with a detailed explanation. "
+        )
+        sys_msg += f"""
+            # User Query:
+        <<<{prompt}>>>
+
+        # The top K most relevant contexts fetched from the documents are as follows:
+        {json.dumps(top_k_metadata, indent=4)}
+
+        # The last few messages of the conversation to help you maintain continuity and relevance:
+        {json.dumps(last_messages)}
+        """
+
+        # Step 1: Generate bullet list of topics.
+        bullet_prompt = "Generate a bullet list of key topics for drafting a defense argument, using '\\n' as a separator."
+        topics_response = call_llm_api(sys_msg, bullet_prompt)
+        topics = [line.strip(" -*") for line in topics_response.split("\n") if line.strip()]
+
+        final_draft = ""
+        for topic in topics:
+            elaboration_prompt = f"Elaborate on the topic '{topic}' with a detailed explanation suitable drafting the document"
+
+            detailed_response = call_llm_api(sys_msg, elaboration_prompt)
+            final_draft += f"\n\n# {topic}:\n{detailed_response}"
+            st.info(f"Drafting for topic: {topic} completed.")
+        
+        return [], final_draft, ""
 
     user_query = f"""
     You are required to provide a structured response to the following question, based on the context retrieved from the provided documents.
@@ -1550,7 +1670,7 @@ def send_email(subject, body, recipient):
 
 def load_whatsapp_contacts():
     # Replace with code to load from a JSON file if needed
-    return {"Anubhav": "919874454959", "Prithviraj": "917980757702", "Vikash Dhanania": "919830151208", "Sumit Singh": "919804129766"}
+    return {"Anubhav": "919874454959", "Prithviraj": "917980757702"}
 
 def load_email_contacts():
     # Replace with code to load from a JSON file if needed
@@ -1847,7 +1967,8 @@ def main():
         logout()  # Display the logout button in the sidebar
 
     st.sidebar.header("Options")
-    option = st.sidebar.selectbox("Choose an option", ["Query Documents", "Query Advanced", "Taskmeister", "Upload Documents"])
+    # option = st.sidebar.selectbox("Choose an option", ["Query Documents", "Query Advanced", "Taskmeister", "Upload Documents", "Usage Monitoring"])
+    option = st.sidebar.selectbox("Choose an option", ["Query Documents", "Upload Documents", "Usage Monitoring"])
 
     if option == "Upload Documents":
         st.header("Upload Documents")
@@ -1883,6 +2004,8 @@ def main():
             st.success("Started a new conversation.")
 
         web_search = st.sidebar.toggle("Enable Web Search")
+        draft_mode = st.sidebar.toggle("Enable Draft Mode (To Generate Documents/ Arguments)")
+        analyse_mode = st.sidebar.toggle("Enable Analyse Mode (For Deeper Analysis and Search) [Consumes more Tokens]")
         top_k = st.sidebar.slider("Select Top-K Results", min_value=1, max_value=100, value=50, step=1)
 
         # File and Page Range Selection
@@ -2162,6 +2285,16 @@ def main():
                         
                         st.write("**WhatsApp Sharing Results:**", whatsapp_results)
                         st.write("**Email Sharing Results:**", email_results)
+                # New expander for downloading the answer as a Word document
+                with st.expander("Download as Word Document"):
+                    word_buffer = create_word_doc(message["content"])
+                    st.download_button(
+                        label="Download Answer",
+                        data=word_buffer,
+                        file_name="Answer.docx",
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    )
+
 
         # --- New User Input using text_area ---
         user_message = user_input()
@@ -2183,7 +2316,9 @@ def main():
                     top_k,
                     last_messages,
                     web_search,
-                    llm_model
+                    llm_model,
+                    draft_mode, 
+                    analyse_mode
                 )
                 st.session_state.sources.append({
                     "top_k_metadata": top_k_metadata,
@@ -2288,7 +2423,7 @@ def main():
         
         
         # Input for the user to ask a question
-        query = st.text_input("Ask a question about the documents (e.g., 'Compare amounts for employee benefits and management')")
+        query = st.text_area("Ask a question about the documents (e.g., 'Compare amounts for employee benefits and management')", height=150)
 
         # Add a submit button for the query
         if st.button("Submit"):
@@ -2410,6 +2545,80 @@ def main():
             
             st.write("**WhatsApp Sharing Results:**", whatsapp_results)
             st.write("**Email Sharing Results:**", email_results)
+
+    elif option == "Usage Monitoring":
+        st.header("Usage Monitoring - Last 30 Days")
+        
+        # Load the chat history (this is a dict with keys as usernames)
+        chat_history = load_chat_history()
+        
+        # Create a list of records: each record is { 'user': ..., 'timestamp': ... }
+        records = []
+        for user, conversations in chat_history.items():
+            for conv in conversations:
+                # Assume each conversation has a 'timestamp' field
+                timestamp_str = conv.get("timestamp")
+                if timestamp_str:
+                    try:
+                        ts = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
+                        records.append({"user": user, "timestamp": ts})
+                    except Exception as e:
+                        st.warning(f"Timestamp format error for user {user}: {e}")
+        
+        if not records:
+            st.info("No usage data available.")
+        else:
+            # Convert records to a Pandas DataFrame
+            df = pd.DataFrame(records)
+            
+            # Filter for the last 30 days
+            today = datetime.today()
+            start_date = today - timedelta(days=30)
+            df_last30 = df[df["timestamp"] >= start_date]
+            
+            # --- Bar Graph: Total Queries per User ---
+            user_counts = df_last30.groupby("user").size().reset_index(name="queries")
+            bar_fig = px.bar(user_counts, x="user", y="queries",
+                            title="Total Queries per User (Last 30 Days)",
+                            labels={"user": "User", "queries": "Number of Queries"})
+            st.plotly_chart(bar_fig, use_container_width=True)
+            
+            # --- Line Graph: Day-wise Queries per User with Moving Average ---
+            # Create a 'date' column (date only, no time)
+            df_last30["date"] = df_last30["timestamp"].dt.date
+            
+            # Count queries per user per day
+            daily_counts = df_last30.groupby(["user", "date"]).size().reset_index(name="queries")
+            
+            # Create a complete date range for the last 30 days
+            date_range = pd.date_range(start=start_date.date(), end=today.date())
+            all_users = daily_counts["user"].unique()
+            complete_data = []
+            
+            for user in all_users:
+                user_df = daily_counts[daily_counts["user"] == user].copy()
+                user_df.set_index("date", inplace=True)
+                # Reindex to include all dates in the range, filling missing days with 0 queries
+                user_df = user_df.reindex(date_range, fill_value=0)
+                user_df = user_df.rename_axis("date").reset_index()
+                user_df["user"] = user
+                # Calculate a 30-day moving average (for available data)
+                user_df["moving_avg"] = user_df["queries"].rolling(window=30, min_periods=1).mean()
+                complete_data.append(user_df)
+            
+            daily_all = pd.concat(complete_data, ignore_index=True)
+            
+            # Create the line graph with one line per user
+            line_fig = px.line(daily_all, x="date", y="queries", color="user",
+                            title="Daily Queries per User (Last 30 Days)",
+                            labels={"date": "Date", "queries": "Number of Queries"})
+            # Add moving average lines for each user
+            for user in all_users:
+                user_data = daily_all[daily_all["user"] == user]
+                line_fig.add_trace(go.Scatter(x=user_data["date"], y=user_data["moving_avg"],
+                                            mode="lines", name=f"{user} - 30-Day MA"))
+            
+            st.plotly_chart(line_fig, use_container_width=True)
 
     else:
         st.warning("No files available in the index. Please upload Documents to populate the index.")

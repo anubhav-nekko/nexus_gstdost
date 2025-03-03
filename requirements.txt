@@ -14,3 +14,4 @@ plotly
 pandas
 python-docx
 python-pptx
+azure-storage-blob
