@@ -1506,7 +1506,8 @@ def summarize_document_pages(filename, start_page, end_page, summary_prompt):
         # Determine the chunk's pages (ensure we don't exceed total_pages)
         start_idx = i
         end_idx = min(i + base_chunk_size, total_pages)
-        chunk_text = json.dumps(pages[j] for j in range(start_idx, end_idx))
+        # chunk_text = json.dumps(pages[j] for j in range(start_idx, end_idx))
+        chunk_text = json.dumps([pages[j] for j in range(start_idx, end_idx)])
         user_query = f"Summarize the following document from file `{filename}` text:\n{chunk_text}"
         chunk_summary = call_llm_api(summary_prompt, user_query)
         chunk_summaries.append(chunk_summary)
