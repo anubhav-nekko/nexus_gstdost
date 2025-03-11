@@ -1323,35 +1323,49 @@ def query_documents_with_page_range(selected_files, selected_page_ranges, prompt
         top_k_metadata = summaries
 
     if draft_mode:
+        # Construct a structured system message with clear sections.
         sys_msg = (
-            "You are a Helpful Legal Data Analyst specializing in legal document analysis. "
-            "Your task is to help draft a document based on the user ask, document text, and the last 5 messages provided for context "
-            "First, generate a bullet list of key topics. Then, for each topic, elaborate with a detailed explanation. "
+            "You are a Helpful Legal Data Analyst specializing in legal document analysis.\n"
+            "Your task is to draft a legal document based on the following inputs. Follow these steps:\n"
+            "1. Review the User Query, Document Context, and Conversation History.\n"
+            "2. Generate a bullet list of key topics for the document.\n"
+            "3. For each topic, draft a detailed section ensuring continuity and avoiding repetition.\n\n"
+            "-----\n"
+            "User Query:\n"
+            f"{prompt}\n"
+            "-----\n"
+            "Document Context (Top K relevant):\n"
+            f"{json.dumps(top_k_metadata, indent=2)}\n"
+            "-----\n"
+            "Conversation History (Last few messages):\n"
+            f"{json.dumps(last_messages, indent=2)}\n"
+            "-----\n"
         )
-        sys_msg += f"""
-            # User Query:
-        <<<{prompt}>>>
-
-        # The top K most relevant contexts fetched from the documents are as follows:
-        {json.dumps(top_k_metadata, indent=4)}
-
-        # The last few messages of the conversation to help you maintain continuity and relevance:
-        {json.dumps(last_messages)}
-        """
 
         # Step 1: Generate bullet list of topics.
-        bullet_prompt = "Generate a bullet list of key topics for drafting a defense argument, using '\\n' as a separator."
+        bullet_prompt = (
+            "Based on the above, generate a bullet list of key topics for drafting a legal document. "
+            "Each topic should appear on its own line, starting with a dash (-)."
+        )
         topics_response = call_llm_api(sys_msg, bullet_prompt)
-        topics = [line.strip(" -*") for line in topics_response.split("\n") if line.strip()]
+        topics = [line.lstrip(" -").strip() for line in topics_response.split("\n") if line.strip()]
+        total_topics = len(topics)
 
         final_draft = ""
-        for topic in topics:
-            elaboration_prompt = f"Elaborate on the topic '{topic}' with a detailed explanation suitable drafting the document"
-
+        # Draft each topic section iteratively with a progress message.
+        for index, topic in enumerate(topics, start=1):
+            elaboration_prompt = (
+                f"Draft a detailed section for the topic: '{topic}'.\n\n"
+                "Use the following context to ensure continuity:\n"
+                "1. The User Query and Document Context provided above.\n"
+                "2. The draft generated so far:\n"
+                f"{final_draft}\n"
+                "3. Make sure not to repeat information already included in previous sections.\n"
+            )
             detailed_response = call_llm_api(sys_msg, elaboration_prompt)
             final_draft += f"\n\n# {topic}:\n{detailed_response}"
-            st.info(f"Drafting for topic: {topic} completed.")
-        
+            st.info(f"Drafting for topic {index}/{total_topics} ({topic}) completed.")
+
         return [], final_draft, ""
 
     user_query = f"""
