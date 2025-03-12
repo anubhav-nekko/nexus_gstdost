@@ -1287,16 +1287,16 @@ def query_documents_viz(selected_files, selected_page_ranges, query, top_k, web_
         """
         if llm_model=="Claude 3.5 Sonnet":
             answer = call_llm_api(query_prompt, user_query+wsp)
-        elif llm_model=="GPT 4o":
+        elif llm_model=="Model 3":
             answer = call_gpt_api(query_prompt, user_query+wsp)
-        elif llm_model=="Nekko Atom":
+        elif llm_model=="Nekko 2":
             answer = call_nekkollm_api(query_prompt, user_query+wsp)
     else:
         if llm_model=="Claude 3.5 Sonnet":
             answer = call_llm_api(query_prompt, user_query)
-        elif llm_model=="GPT 4o":
+        elif llm_model=="Model 3":
             answer = call_gpt_api(query_prompt, user_query)
-        elif llm_model=="Nekko Atom":
+        elif llm_model=="Nekko 2":
             answer = call_nekkollm_api(query_prompt, user_query)
 
     return answer
@@ -1459,16 +1459,16 @@ def query_documents_with_page_range(selected_files, selected_page_ranges, prompt
         """
         if llm_model=="Claude 3.5 Sonnet":
             answer = call_llm_api(system_message, user_query+wsp)
-        elif llm_model=="GPT 4o":
+        elif llm_model=="Model 3":
             answer = call_gpt_api(system_message, user_query+wsp)
-        elif llm_model=="Nekko Atom":
+        elif llm_model=="Nekko 2":
             answer = call_nekkollm_api(system_message, user_query+wsp)
     else:
         if llm_model=="Claude 3.5 Sonnet":
             answer = call_llm_api(system_message, user_query)
-        elif llm_model=="GPT 4o":
+        elif llm_model=="Model 3":
             answer = call_gpt_api(system_message, user_query)
-        elif llm_model=="Nekko Atom":
+        elif llm_model=="Nekko 2":
             answer = call_nekkollm_api(system_message, user_query)
 
     return top_k_metadata, answer, ws_response
@@ -2104,7 +2104,7 @@ def main():
     elif option == "Query Documents":
         st.header("Query Documents")
         st.sidebar.header("Settings")
-        llm_model = st.sidebar.selectbox("Choose Your Model", ["Nekko Atom", "Claude 3.5 Sonnet", "GPT 4o"])
+        llm_model = st.sidebar.selectbox("Choose Your Model", ["Nekko 2", "Claude 3.5 Sonnet", "Model 3"])
 
         # "New Chat" button resets conversation and state.
         if st.sidebar.button("New Chat"):
@@ -2473,7 +2473,7 @@ def main():
     elif option == "Query Advanced":
         st.header("Query Advanced")
         st.sidebar.header("Settings")
-        llm_model = st.sidebar.selectbox("Choose Your Model", ["Nekko Atom", "Claude 3.5 Sonnet", "GPT 4o"])
+        llm_model = st.sidebar.selectbox("Choose Your Model", ["Nekko 2", "Claude 3.5 Sonnet", "Model 3"])
 
         web_search = st.sidebar.toggle("Enable Web Search")
         top_k = st.sidebar.slider("Select Top-K Results", min_value=1, max_value=100, value=50, step=1)
