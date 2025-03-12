@@ -15,3 +15,6 @@ pandas
 python-docx
 python-pptx
 azure-storage-blob
+openai
+Pillow
+opencv-python
