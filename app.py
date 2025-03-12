@@ -2278,6 +2278,7 @@ def main():
                     user = st.session_state.username
                     if user in st.session_state.chat_history:
                         # Update last-used timestamp on the conversation itself (see step 2 below)
+                        ist_timezone = pytz.timezone("Asia/Kolkata")
                         conv["timestamp"] = datetime.now(ist_timezone).strftime("%Y-%m-%d %H:%M:%S")
                         # Sort by new timestamp so it goes to the top
                         st.session_state.chat_history[user] = sorted(
