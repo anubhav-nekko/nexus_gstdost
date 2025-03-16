@@ -2339,7 +2339,7 @@ def main():
                     save_chat_history(st.session_state.chat_history)
                     st.sidebar.success("Conversation renamed!")
                     # Force a full rerun so updated labels and keys are used.
-                    st.experimental_rerun()
+                    st.rerun()
         else:
 
             for idx, conv in enumerate(unique_conversations):
@@ -2347,7 +2347,7 @@ def main():
                 conv_label = conv.get("label") or conv.get('messages', [{}])[0].get("content", "")[:20]
                 
                 # Use two columns in the sidebar
-                col1, col2 = st.sidebar.columns([0.7, 0.3], gap="small")
+                col1, col2 = st.sidebar.columns([0.9, 0.1], gap="small")
 
                 # "Load" button in the first column
                 if col1.button(conv_label, key=f"conv_load_{idx}"):
@@ -2372,11 +2372,44 @@ def main():
 
                 # "Delete" button in the second column
                 if col2.button("X", key=f"conv_delete_{idx}"):
-                    user = st.session_state.username
-                    if user in st.session_state.chat_history:
-                        st.session_state.chat_history[user].remove(conv)
-                        save_chat_history(st.session_state.chat_history)
+                    # user = st.session_state.username
+                    # if user in st.session_state.chat_history:
+                    #     st.session_state.chat_history[user].remove(conv)
+                    #     save_chat_history(st.session_state.chat_history)
+                    #     st.rerun()
+                    # Instead of deleting right away, mark this conversation for deletion.
+                    st.session_state["confirm_delete_conv"] = conv
+                    st.rerun()
+            
+            # --- Outside the for-loop that lists the conversations ---
+            if "confirm_delete_conv" in st.session_state:
+                st.warning("Are you sure you want to delete this conversation? This action cannot be undone.")
+
+                ccol1, ccol2 = st.columns(2)
+                with ccol1:
+                    if st.button("Confirm Delete"):
+                        user = st.session_state.username
+                        # Proceed with the actual deletion
+                        if user in st.session_state.chat_history:
+                            try:
+                                st.session_state.chat_history[user].remove(st.session_state["confirm_delete_conv"])
+                            except ValueError:
+                                pass  # Already removed or not found
+
+                            save_chat_history(st.session_state.chat_history)
+                        
+                        # Clear the conversation from session state
+                        del st.session_state["confirm_delete_conv"]
+                        st.success("Conversation deleted!")
                         st.rerun()
+
+                with ccol2:
+                    if st.button("Cancel"):
+                        # Simply clear the pending delete conversation
+                        del st.session_state["confirm_delete_conv"]
+                        st.info("Deletion canceled.")
+                        st.rerun()
+
 
         # --- Ensure required session state keys exist ---
         if "share_message" not in st.session_state:
