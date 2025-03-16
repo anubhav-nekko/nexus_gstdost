@@ -743,6 +743,7 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from openai import AzureOpenAI
+from openai import OpenAI
 
 if "Authenticator" not in st.session_state:
     st.session_state["Authenticator"] = None
@@ -798,6 +799,8 @@ TAVILY_API = SECRETS["TAVILY_API"]
 WHATSAPP_TOKEN = SECRETS["WHATSAPP_TOKEN"]
 EMAIL_ID = SECRETS["EMAIL_ID"]
 EMAIL_PWD = SECRETS["EMAIL_PWD"]
+OPENAI_ENDPOINT = SECRETS["OPENAI_ENDPOINT"]
+OPENAI_KEY = SECRETS["OPENAI_KEY"]
 
 # Paths for saving index and metadata
 FAISS_INDEX_PATH = SECRETS["FAISS_INDEX_PATH"]
@@ -983,7 +986,7 @@ def call_llm_api(system_message, user_query):
     # Prepare the request payload
     payload = {
         "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 4096,
+        "max_tokens": 16384,
         "messages": [
             {
                 "role": "user",
@@ -1009,42 +1012,120 @@ def call_llm_api(system_message, user_query):
         return f"An error occurred: {str(e)}"
     
 def call_gpt_api(system_message, user_query):
-    url = GPT_ENDPOINT
-    headers = {  
-        "Content-Type": "application/json",  
-        "api-key": GPT_API
-    }  
-    messages = [
-        {"role": "system", "content": system_message},
-        {"role": "user", "content": user_query}
-    ]
-    payload = {  
-        "messages": messages,  
-        "temperature": 0.7,  
-        "max_tokens": 4096   
-    }
-    response = requests.post(url, headers=headers, data=json.dumps(payload))
-    response.raise_for_status()  
-    return response.json()["choices"][0]["message"]["content"]
+    # url = GPT_ENDPOINT
+    # headers = {  
+    #     "Content-Type": "application/json",  
+    #     "api-key": GPT_API
+    # }  
+    # messages = [
+    #     {"role": "system", "content": system_message},
+    #     {"role": "user", "content": user_query}
+    # ]
+    # payload = {  
+    #     "messages": messages,  
+    #     "temperature": 0.7,  
+    #     "max_tokens": 4096   
+    # }
+    # response = requests.post(url, headers=headers, data=json.dumps(payload))
+    # response.raise_for_status()  
+    # return response.json()["choices"][0]["message"]["content"]
+    
+    client = OpenAI(api_key = OPENAI_KEY)
+    
+    response = client.responses.create(
+      model="gpt-4o",
+      input=[
+        {
+          "role": "system",
+          "content": [
+            {
+              "type": "input_text",
+              "text": system_message
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": user_query
+            }
+          ]
+        }
+      ],
+      text={
+        "format": {
+          "type": "text"
+        }
+      },
+      reasoning={},
+      tools=[],
+      temperature=0.7,
+      max_output_tokens=16384,
+      top_p=1,
+      store=True
+    )
+    
+    return response.output[0].content[0].text
 
 def call_nekkollm_api(system_message, user_query):
-    url = GPT_ENDPOINT
-    headers = {  
-        "Content-Type": "application/json",  
-        "api-key": GPT_API
-    }  
-    messages = [
-        {"role": "system", "content": nekkollm_prompt + system_message},
-        {"role": "user", "content": user_query}
-    ]
-    payload = {  
-        "messages": messages,  
-        "temperature": 0.7,  
-        "max_tokens": 16384   
-    }
-    response = requests.post(url, headers=headers, data=json.dumps(payload))
-    response.raise_for_status()  
-    return response.json()["choices"][0]["message"]["content"]
+    # url = GPT_ENDPOINT
+    # headers = {  
+    #     "Content-Type": "application/json",  
+    #     "api-key": GPT_API
+    # }  
+    # messages = [
+    #     {"role": "system", "content": nekkollm_prompt + system_message},
+    #     {"role": "user", "content": user_query}
+    # ]
+    # payload = {  
+    #     "messages": messages,  
+    #     "temperature": 0.7,  
+    #     "max_tokens": 16384   
+    # }
+    # response = requests.post(url, headers=headers, data=json.dumps(payload))
+    # response.raise_for_status()  
+    # return response.json()["choices"][0]["message"]["content"]
+    
+    client = OpenAI(api_key = OPENAI_KEY)
+    
+    response = client.responses.create(
+      model="gpt-4o",
+      input=[
+        {
+          "role": "system",
+          "content": [
+            {
+              "type": "input_text",
+              "text": system_message
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": user_query
+            }
+          ]
+        }
+      ],
+      text={
+        "format": {
+          "type": "text"
+        }
+      },
+      reasoning={},
+      tools=[],
+      temperature=0.7,
+      max_output_tokens=16384,
+      top_p=1,
+      store=True
+    )
+    
+    return response.output[0].content[0].text
 
 # Faiss index initialization
 dimension = 768  # Embedding dimension for text embeddings v3
@@ -1287,16 +1368,16 @@ def query_documents_viz(selected_files, selected_page_ranges, query, top_k, web_
         """
         if llm_model=="Claude 3.5 Sonnet":
             answer = call_llm_api(query_prompt, user_query+wsp)
-        elif llm_model=="Model 3":
+        elif llm_model=="GPT 4o":
             answer = call_gpt_api(query_prompt, user_query+wsp)
-        elif llm_model=="Nekko 2":
+        elif llm_model=="Nekko LLM":
             answer = call_nekkollm_api(query_prompt, user_query+wsp)
     else:
         if llm_model=="Claude 3.5 Sonnet":
             answer = call_llm_api(query_prompt, user_query)
-        elif llm_model=="Model 3":
+        elif llm_model=="GPT 4o":
             answer = call_gpt_api(query_prompt, user_query)
-        elif llm_model=="Nekko 2":
+        elif llm_model=="Nekko LLM":
             answer = call_nekkollm_api(query_prompt, user_query)
 
     return answer
@@ -1459,16 +1540,16 @@ def query_documents_with_page_range(selected_files, selected_page_ranges, prompt
         """
         if llm_model=="Claude 3.5 Sonnet":
             answer = call_llm_api(system_message, user_query+wsp)
-        elif llm_model=="Model 3":
+        elif llm_model=="GPT 4o":
             answer = call_gpt_api(system_message, user_query+wsp)
-        elif llm_model=="Nekko 2":
+        elif llm_model=="Nekko LLM":
             answer = call_nekkollm_api(system_message, user_query+wsp)
     else:
         if llm_model=="Claude 3.5 Sonnet":
             answer = call_llm_api(system_message, user_query)
-        elif llm_model=="Model 3":
+        elif llm_model=="GPT 4o":
             answer = call_gpt_api(system_message, user_query)
-        elif llm_model=="Nekko 2":
+        elif llm_model=="Nekko LLM":
             answer = call_nekkollm_api(system_message, user_query)
 
     return top_k_metadata, answer, ws_response
@@ -2104,7 +2185,7 @@ def main():
     elif option == "Query Documents":
         st.header("Query Documents")
         st.sidebar.header("Settings")
-        llm_model = st.sidebar.selectbox("Choose Your Model", ["Nekko 2", "Claude 3.5 Sonnet", "Model 3"])
+        llm_model = st.sidebar.selectbox("Choose Your Model", ["Nekko LLM", "Claude 3.5 Sonnet", "GPT 4o"])
 
         # "New Chat" button resets conversation and state.
         if st.sidebar.button("New Chat"):
@@ -2474,7 +2555,7 @@ def main():
     elif option == "Query Advanced":
         st.header("Query Advanced")
         st.sidebar.header("Settings")
-        llm_model = st.sidebar.selectbox("Choose Your Model", ["Nekko 2", "Claude 3.5 Sonnet", "Model 3"])
+        llm_model = st.sidebar.selectbox("Choose Your Model", ["Nekko LLM", "Claude 3.5 Sonnet", "GPT 4o"])
 
         web_search = st.sidebar.toggle("Enable Web Search")
         top_k = st.sidebar.slider("Select Top-K Results", min_value=1, max_value=100, value=50, step=1)
