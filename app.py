@@ -1516,7 +1516,7 @@ def query_documents_with_page_range(selected_files, selected_page_ranges, prompt
 
     ws_response = ""
 
-    if web_search:
+    if web_search or analyse_mode:
         ws_query = prompt_op["web_search_prompt"]
         # Call the LLM API to get the answer
         # To install, run: pip install tavily-python
