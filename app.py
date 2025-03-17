@@ -2492,8 +2492,11 @@ def main():
 
                             # Display file sources separately
                             for metadata in top_k_metadata:
-                                st.markdown(f"**Filename:** {metadata['filename']}, **Page:** {metadata['page']}")
-                                st.code(metadata['text'], language="markdown")  # Use st.code for better formatting
+                                try:
+                                    st.markdown(f"**Filename:** {metadata['filename']}, **Page:** {metadata['page']}")
+                                    st.code(metadata['text'], language="markdown")  # Use st.code for better formatting
+                                except:
+                                    st.code(metadata['text'], language="markdown")  # Use st.code for better formatting
 
                             # Show Web Search Results separately
                             if ws_query:
