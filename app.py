@@ -791,7 +791,10 @@ SECRETS = load_dict_from_json(secrets_file)
 aws_access_key_id = SECRETS["aws_access_key_id"]
 aws_secret_access_key = SECRETS["aws_secret_access_key"]
 INFERENCE_PROFILE_ARN = SECRETS["INFERENCE_PROFILE_ARN"]
+INFERENCE_PROFILE_CLAUDE = SECRETS["INFERENCE_PROFILE_CLAUDE"]
+INFERENCE_PROFILE_DEEPSEEK = SECRETS["INFERENCE_PROFILE_DEEPSEEK"]
 REGION = SECRETS["REGION"]
+REGION2 = SECRETS["REGION2"]
 GPT_ENDPOINT = SECRETS["GPT_ENDPOINT"]
 GPT_API = SECRETS["GPT_API"]
 DALLE_ENDPOINT = SECRETS["DALLE_ENDPOINT"]
@@ -800,7 +803,7 @@ WHATSAPP_TOKEN = SECRETS["WHATSAPP_TOKEN"]
 EMAIL_ID = SECRETS["EMAIL_ID"]
 EMAIL_PWD = SECRETS["EMAIL_PWD"]
 # OPENAI_ENDPOINT = SECRETS["OPENAI_ENDPOINT"]
-# OPENAI_KEY = SECRETS["OPENAI_KEY"]
+OPENAI_KEY = SECRETS["OPENAI_KEY"]
 
 # Paths for saving index and metadata
 FAISS_INDEX_PATH = SECRETS["FAISS_INDEX_PATH"]
@@ -822,7 +825,11 @@ def display_logo():
     st.image("logo.png", width=200)
 
 # Create a Bedrock Runtime client
-bedrock_runtime = boto3.client('bedrock-runtime', region_name=REGION,
+# bedrock_runtime = boto3.client('bedrock-runtime', region_name=REGION,
+#                               aws_access_key_id=aws_access_key_id,
+#                               aws_secret_access_key=aws_secret_access_key)
+
+bedrock_runtime2 = boto3.client('bedrock-runtime', region_name=REGION2,
                               aws_access_key_id=aws_access_key_id,
                               aws_secret_access_key=aws_secret_access_key)
 
@@ -997,7 +1004,7 @@ def call_llm_api(system_message, user_query):
 
     try:
         # Invoke the model (Claude)
-        response = bedrock_runtime.invoke_model(
+        response = bedrock_runtime2.invoke_model(
             modelId=INFERENCE_PROFILE_ARN,  # Use the ARN for your inference profile
             contentType='application/json',
             accept='application/json',
@@ -1012,120 +1019,125 @@ def call_llm_api(system_message, user_query):
         return f"An error occurred: {str(e)}"
     
 def call_gpt_api(system_message, user_query):
-    url = GPT_ENDPOINT
-    headers = {  
-        "Content-Type": "application/json",  
-        "api-key": GPT_API
-    }  
-    messages = [
-        {"role": "system", "content": system_message},
-        {"role": "user", "content": user_query}
-    ]
-    payload = {  
-        "messages": messages,  
-        "temperature": 0.7,  
-        "max_tokens": 4096   
-    }
-    response = requests.post(url, headers=headers, data=json.dumps(payload))
-    response.raise_for_status()  
-    return response.json()["choices"][0]["message"]["content"]
+    # url = GPT_ENDPOINT
+    # headers = {  
+    #     "Content-Type": "application/json",  
+    #     "api-key": GPT_API
+    # }  
+    # messages = [
+    #     {"role": "system", "content": system_message},
+    #     {"role": "user", "content": user_query}
+    # ]
+    # payload = {  
+    #     "messages": messages,  
+    #     "temperature": 0.7,  
+    #     "max_tokens": 4096   
+    # }
+    # response = requests.post(url, headers=headers, data=json.dumps(payload))
+    # response.raise_for_status()  
+    # return response.json()["choices"][0]["message"]["content"]
     
-    # client = OpenAI(api_key = OPENAI_KEY)
+    client = OpenAI(api_key = OPENAI_KEY)
     
-    # response = client.responses.create(
-    #   model="gpt-4o",
-    #   input=[
-    #     {
-    #       "role": "system",
-    #       "content": [
-    #         {
-    #           "type": "input_text",
-    #           "text": system_message
-    #         }
-    #       ]
-    #     },
-    #     {
-    #       "role": "user",
-    #       "content": [
-    #         {
-    #           "type": "input_text",
-    #           "text": user_query
-    #         }
-    #       ]
-    #     }
-    #   ],
-    #   text={
-    #     "format": {
-    #       "type": "text"
-    #     }
-    #   },
-    #   reasoning={},
-    #   tools=[],
-    #   temperature=0.7,
-    #   max_output_tokens=16384,
-    #   top_p=1,
-    #   store=True
-    # )
+    response = client.responses.create(
+      model="gpt-4o",
+      input=[
+        {
+          "role": "system",
+          "content": [
+            {
+              "type": "input_text",
+              "text": system_message
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": user_query
+            }
+          ]
+        }
+      ],
+      text={
+        "format": {
+          "type": "text"
+        }
+      },
+      reasoning={},
+      tools=[],
+      temperature=0.7,
+      max_output_tokens=16384,
+      top_p=1,
+      store=True
+    )
     
-    # return response.output[0].content[0].text
+    return response.output[0].content[0].text
 
-def call_nekkollm_api(system_message, user_query):
-    url = GPT_ENDPOINT
-    headers = {  
-        "Content-Type": "application/json",  
-        "api-key": GPT_API
-    }  
-    messages = [
-        {"role": "system", "content": nekkollm_prompt + system_message},
-        {"role": "user", "content": user_query}
-    ]
-    payload = {  
-        "messages": messages,  
-        "temperature": 0.7,  
-        "max_tokens": 16384   
+def call_claude_api(system_message, user_query):
+    # Combine system and user messages
+    messages = system_message + user_query
+
+    # Prepare the request payload
+    payload = {
+        "anthropic_version": "bedrock-2023-05-31",
+        "max_tokens": 16384,
+        "messages": [
+            {
+                "role": "user",
+                "content": messages
+            }
+        ]
     }
-    response = requests.post(url, headers=headers, data=json.dumps(payload))
-    response.raise_for_status()  
-    return response.json()["choices"][0]["message"]["content"]
+
+    try:
+        # Invoke the model (Claude)
+        response = bedrock_runtime2.invoke_model(
+            modelId=INFERENCE_PROFILE_CLAUDE,  # Use the ARN for your inference profile
+            contentType='application/json',
+            accept='application/json',
+            body=json.dumps(payload)
+        )
+
+        # Parse and return the response
+        response_body = json.loads(response['body'].read())
+        return response_body['content'][0]['text']
+
+    except Exception as e:
+        return f"An error occurred: {str(e)}"
     
-    # client = OpenAI(api_key = OPENAI_KEY)
-    
-    # response = client.responses.create(
-    #   model="gpt-4o",
-    #   input=[
-    #     {
-    #       "role": "system",
-    #       "content": [
-    #         {
-    #           "type": "input_text",
-    #           "text": system_message
-    #         }
-    #       ]
-    #     },
-    #     {
-    #       "role": "user",
-    #       "content": [
-    #         {
-    #           "type": "input_text",
-    #           "text": user_query
-    #         }
-    #       ]
-    #     }
-    #   ],
-    #   text={
-    #     "format": {
-    #       "type": "text"
-    #     }
-    #   },
-    #   reasoning={},
-    #   tools=[],
-    #   temperature=0.7,
-    #   max_output_tokens=16384,
-    #   top_p=1,
-    #   store=True
-    # )
-    
-    # return response.output[0].content[0].text
+def call_deepseek_api(system_message, user_query):
+    # Combine system and user messages
+    messages = system_message + user_query
+
+    # Prepare the request payload
+    payload = {
+        "max_tokens": 16384,
+        "messages": [
+            {
+                "role": "user",
+                "content": messages
+            }
+        ]
+    }
+
+    try:
+        # Invoke the model (Claude)
+        response = bedrock_runtime2.invoke_model(
+            modelId=INFERENCE_PROFILE_DEEPSEEK,  # Use the ARN for your inference profile
+            contentType='application/json',
+            accept='application/json',
+            body=json.dumps(payload)
+        )
+
+        # Parse and return the response
+        response_body = json.loads(response['body'].read())
+        return response_body["choices"][0]["message"]["content"]
+
+    except Exception as e:
+        return f"An error occurred: {str(e)}"
 
 # Faiss index initialization
 dimension = 768  # Embedding dimension for text embeddings v3
@@ -1361,24 +1373,19 @@ def query_documents_viz(selected_files, selected_page_ranges, query, top_k, web_
 
         print(ws_response)
 
-        wsp = f"""
-        # Feel free to use the Web Search Results for Additional Context as well:
+    wsp = f"""
+    # Feel free to use the Web Search Results for Additional Context as well:
 
-        {json.dumps(ws_response)}
-        """
-        if llm_model=="Claude 3.5 Sonnet":
-            answer = call_llm_api(query_prompt, user_query+wsp)
-        elif llm_model=="GPT 4o":
-            answer = call_gpt_api(query_prompt, user_query+wsp)
-        elif llm_model=="Nekko LLM":
-            answer = call_nekkollm_api(query_prompt, user_query+wsp)
-    else:
-        if llm_model=="Claude 3.5 Sonnet":
-            answer = call_llm_api(query_prompt, user_query)
-        elif llm_model=="GPT 4o":
-            answer = call_gpt_api(query_prompt, user_query)
-        elif llm_model=="Nekko LLM":
-            answer = call_nekkollm_api(query_prompt, user_query)
+    {json.dumps(ws_response)}
+    """
+    if llm_model=="Claude 3.5 Sonnet":
+        answer = call_llm_api(query_prompt, user_query+wsp)
+    elif llm_model=="GPT 4o":
+        answer = call_gpt_api(query_prompt, user_query+wsp)
+    elif llm_model=="Claude 3.7 Sonnet":
+        answer = call_claude_api(query_prompt, user_query+wsp)
+    elif llm_model=="Deepseek R1":
+        answer = call_deepseek_api(query_prompt, user_query+wsp)
 
     return answer
 
@@ -1532,25 +1539,20 @@ def query_documents_with_page_range(selected_files, selected_page_ranges, prompt
 
         print(ws_response)
 
-        wsp = f"""
-        # Feel free to use the Web Search Results for Additional Context as well:
-        Please ensure your output is concise, well-organized, and each resource hyperlink is clickable. Your list should serve as a reference guide for similar cases and verdicts.
+    wsp = f"""
+    # Feel free to use the Web Search Results for Additional Context as well:
+    Please ensure your output is concise, well-organized, and each resource hyperlink is clickable. Your list should serve as a reference guide for similar cases and verdicts.
 
-        {json.dumps(ws_response)}
-        """
-        if llm_model=="Claude 3.5 Sonnet":
-            answer = call_llm_api(system_message, user_query+wsp)
-        elif llm_model=="GPT 4o":
-            answer = call_gpt_api(system_message, user_query+wsp)
-        elif llm_model=="Nekko LLM":
-            answer = call_nekkollm_api(system_message, user_query+wsp)
-    else:
-        if llm_model=="Claude 3.5 Sonnet":
-            answer = call_llm_api(system_message, user_query)
-        elif llm_model=="GPT 4o":
-            answer = call_gpt_api(system_message, user_query)
-        elif llm_model=="Nekko LLM":
-            answer = call_nekkollm_api(system_message, user_query)
+    {json.dumps(ws_response)}
+    """
+    if llm_model=="Claude 3.5 Sonnet":
+        answer = call_llm_api(system_message, user_query+wsp)
+    elif llm_model=="GPT 4o":
+        answer = call_gpt_api(system_message, user_query+wsp)
+    elif llm_model=="Claude 3.7 Sonnet":
+        answer = call_claude_api(system_message, user_query+wsp)
+    elif llm_model=="Deepseek R1":
+        answer = call_deepseek_api(system_message, user_query+wsp)
 
     return top_k_metadata, answer, ws_response
 
@@ -1577,49 +1579,61 @@ def final_format(top_k_metadata, answer, ws_response):
         
     """
 
+    # final_op_format = '''
+    #     For Transparency and Explanability, we Would like you to do the following:
+    #         1. Break the Answer into Logical Shards.
+    #         2. For Each Shard, Map them to the Relevant Sources (From the Provided TopK Context) in the Formatting as Presented below
+        
+    #     Note: The Shards when concatenated should help us regenerate the provided `Generated Answer`
+    #     Approach the Above Step by Step.
+
+    #     # Final Output Format:
+    #     ```
+    #     {
+    #         "segmented_answer":    
+    #             [
+    #                 {
+    #                     "section": "The first shard of the generated answer",
+    #                     "sources": [
+    #                                     {"filename": "The First Filename", "page": "page_num", "text": "The Relevant text from the page only"},
+    #                                     {"filename": "The Second Filename", "page": "page_num", "text": "The Relevant text from the page only"},
+    #                                     . # Add more sources if necessary
+    #                                 ]
+    #                 },
+    #                 {
+    #                     "section": "The second part of the generated answer", 
+    #                     "sources": [
+    #                                     {"filename": "The First Filename", "page": "page_num", "text": "The Relevant text from the page only"},
+    #                                     {"filename": "The Second Filename", "page": "page_num", "text": "The Relevant text from the page only"},
+    #                                     . # Add more sources if necessary
+    #                                 ]
+    #                 },
+    #                 .
+    #                 .
+    #             ]
+    #     }
+    #     ```
+    # '''
+
+
     final_op_format = '''
         For Transparency and Explanability, we Would like you to do the following:
             1. Break the Answer into Logical Shards.
-            2. For Each Shard, Map them to the Relevant Sources (From the Provided TopK Context) in the Formatting as Presented below
+            2. For Each Shard, Map them to the Relevant Sources (From the Provided TopK Context, Web Search Results and more)
         
         Note: The Shards when concatenated should help us regenerate the provided `Generated Answer`
         Approach the Above Step by Step.
-
-        # Final Output Format:
-        ```
-        {
-            "segmented_answer":    
-                [
-                    {
-                        "section": "The first shard of the generated answer",
-                        "sources": [
-                                        {"filename": "The First Filename", "page": "page_num", "text": "The Relevant text from the page only"},
-                                        {"filename": "The Second Filename", "page": "page_num", "text": "The Relevant text from the page only"},
-                                        . # Add more sources if necessary
-                                    ]
-                    },
-                    {
-                        "section": "The second part of the generated answer", 
-                        "sources": [
-                                        {"filename": "The First Filename", "page": "page_num", "text": "The Relevant text from the page only"},
-                                        {"filename": "The Second Filename", "page": "page_num", "text": "The Relevant text from the page only"},
-                                        . # Add more sources if necessary
-                                    ]
-                    },
-                    .
-                    .
-                ]
-        }
-        ```
     '''
+
     # Call the LLM API to get the answer
     answer = call_llm_api(sys_msg, input_context+final_op_format)
-    try:
-        # return json.loads(answer[7:-3])
-        return json.loads(answer.split("```json")[1].split("```")[0])
-    except:
-        # return json.loads(answer[3:-3])
-        return json.loads(answer.split("```")[1].split("```")[0])
+    # try:
+    #     # return json.loads(answer[7:-3])
+    #     return json.loads(answer.split("```json")[1].split("```")[0])
+    # except:
+    #     # return json.loads(answer[3:-3])
+    #     return json.loads(answer.split("```")[1].split("```")[0])
+    return answer
     
 def summarize_document_pages(filename, start_page, end_page, summary_prompt):
     """
@@ -2185,7 +2199,7 @@ def main():
     elif option == "Query Documents":
         st.header("Query Documents")
         st.sidebar.header("Settings")
-        llm_model = st.sidebar.selectbox("Choose Your Model", ["Nekko LLM", "Claude 3.5 Sonnet", "GPT 4o"])
+        llm_model = st.sidebar.selectbox("Choose Your Model", ["Claude 3.7 Sonnet", "Claude 3.5 Sonnet", "Deepseek R1", "GPT 4o"])
 
         # "New Chat" button resets conversation and state.
         if st.sidebar.button("New Chat"):
@@ -2347,7 +2361,8 @@ def main():
                 conv_label = conv.get("label") or conv.get('messages', [{}])[0].get("content", "")[:20]
                 
                 # Use two columns in the sidebar
-                col1, col2 = st.sidebar.columns([0.9, 0.1], gap="small")
+                # col1, col2 = st.sidebar.columns([0.9, 0.1], gap="small")
+                col1, col2 = st.sidebar.columns([0.9, 0.1])
 
                 # "Load" button in the first column
                 if col1.button(conv_label, key=f"conv_load_{idx}"):
@@ -2591,7 +2606,7 @@ def main():
     elif option == "Query Advanced":
         st.header("Query Advanced")
         st.sidebar.header("Settings")
-        llm_model = st.sidebar.selectbox("Choose Your Model", ["Nekko LLM", "Claude 3.5 Sonnet", "GPT 4o"])
+        llm_model = st.sidebar.selectbox("Choose Your Model", ["Claude 3.7 Sonnet", "Claude 3.5 Sonnet", "Deepseek R1", "GPT 4o"])
 
         web_search = st.sidebar.toggle("Enable Web Search")
         top_k = st.sidebar.slider("Select Top-K Results", min_value=1, max_value=100, value=50, step=1)
