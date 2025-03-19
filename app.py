@@ -993,7 +993,7 @@ def call_llm_api(system_message, user_query):
     # Prepare the request payload
     payload = {
         "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 16384,
+        "max_tokens": 4096,
         "messages": [
             {
                 "role": "user",
@@ -1069,7 +1069,7 @@ def call_gpt_api(system_message, user_query):
       reasoning={},
       tools=[],
       temperature=0.7,
-      max_output_tokens=16384,
+      max_output_tokens=4096,
       top_p=1,
       store=True
     )
@@ -1083,7 +1083,7 @@ def call_claude_api(system_message, user_query):
     # Prepare the request payload
     payload = {
         "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 16384,
+        "max_tokens": 4096,
         "messages": [
             {
                 "role": "user",
@@ -1114,7 +1114,7 @@ def call_deepseek_api(system_message, user_query):
 
     # Prepare the request payload
     payload = {
-        "max_tokens": 16384,
+        "max_tokens": 4096,
         "messages": [
             {
                 "role": "user",
