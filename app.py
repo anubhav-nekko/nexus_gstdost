@@ -742,7 +742,7 @@ import cv2
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from openai import AzureOpenAI
+from openai import AzureOpenAI, OpenAI
 
 if "Authenticator" not in st.session_state:
     st.session_state["Authenticator"] = None
@@ -790,7 +790,10 @@ SECRETS = load_dict_from_json(secrets_file)
 aws_access_key_id = SECRETS["aws_access_key_id"]
 aws_secret_access_key = SECRETS["aws_secret_access_key"]
 INFERENCE_PROFILE_ARN = SECRETS["INFERENCE_PROFILE_ARN"]
+INFERENCE_PROFILE_CLAUDE = SECRETS["INFERENCE_PROFILE_CLAUDE"]
+INFERENCE_PROFILE_DEEPSEEK = SECRETS["INFERENCE_PROFILE_DEEPSEEK"]
 REGION = SECRETS["REGION"]
+REGION2 = SECRETS["REGION2"]
 GPT_ENDPOINT = SECRETS["GPT_ENDPOINT"]
 GPT_API = SECRETS["GPT_API"]
 DALLE_ENDPOINT = SECRETS["DALLE_ENDPOINT"]
@@ -798,6 +801,8 @@ TAVILY_API = SECRETS["TAVILY_API"]
 WHATSAPP_TOKEN = SECRETS["WHATSAPP_TOKEN"]
 EMAIL_ID = SECRETS["EMAIL_ID"]
 EMAIL_PWD = SECRETS["EMAIL_PWD"]
+# OPENAI_ENDPOINT = SECRETS["OPENAI_ENDPOINT"]
+OPENAI_KEY = SECRETS["OPENAI_KEY"]
 
 # Paths for saving index and metadata
 FAISS_INDEX_PATH = SECRETS["FAISS_INDEX_PATH"]
@@ -818,8 +823,12 @@ def display_logo():
     # Make sure 'logo.png' is in your working directory
     st.image("logo.png", width=200)
 
-# Create a Bedrock Runtime client
-bedrock_runtime = boto3.client('bedrock-runtime', region_name=REGION,
+# # Create a Bedrock Runtime client
+# bedrock_runtime = boto3.client('bedrock-runtime', region_name=REGION,
+#                               aws_access_key_id=aws_access_key_id,
+#                               aws_secret_access_key=aws_secret_access_key)
+
+bedrock_runtime2 = boto3.client('bedrock-runtime', region_name=REGION2,
                               aws_access_key_id=aws_access_key_id,
                               aws_secret_access_key=aws_secret_access_key)
 
@@ -994,7 +1003,7 @@ def call_llm_api(system_message, user_query):
 
     try:
         # Invoke the model (Claude)
-        response = bedrock_runtime.invoke_model(
+        response = bedrock_runtime2.invoke_model(
             modelId=INFERENCE_PROFILE_ARN,  # Use the ARN for your inference profile
             contentType='application/json',
             accept='application/json',
@@ -1009,42 +1018,125 @@ def call_llm_api(system_message, user_query):
         return f"An error occurred: {str(e)}"
     
 def call_gpt_api(system_message, user_query):
-    url = GPT_ENDPOINT
-    headers = {  
-        "Content-Type": "application/json",  
-        "api-key": GPT_API
-    }  
-    messages = [
-        {"role": "system", "content": system_message},
-        {"role": "user", "content": user_query}
-    ]
-    payload = {  
-        "messages": messages,  
-        "temperature": 0.7,  
-        "max_tokens": 4096   
-    }
-    response = requests.post(url, headers=headers, data=json.dumps(payload))
-    response.raise_for_status()  
-    return response.json()["choices"][0]["message"]["content"]
+    # url = GPT_ENDPOINT
+    # headers = {  
+    #     "Content-Type": "application/json",  
+    #     "api-key": GPT_API
+    # }  
+    # messages = [
+    #     {"role": "system", "content": system_message},
+    #     {"role": "user", "content": user_query}
+    # ]
+    # payload = {  
+    #     "messages": messages,  
+    #     "temperature": 0.7,  
+    #     "max_tokens": 4096   
+    # }
+    # response = requests.post(url, headers=headers, data=json.dumps(payload))
+    # response.raise_for_status()  
+    # return response.json()["choices"][0]["message"]["content"]
+    
+    client = OpenAI(api_key = OPENAI_KEY)
+    
+    response = client.responses.create(
+      model="gpt-4o",
+      input=[
+        {
+          "role": "system",
+          "content": [
+            {
+              "type": "input_text",
+              "text": system_message
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": user_query
+            }
+          ]
+        }
+      ],
+      text={
+        "format": {
+          "type": "text"
+        }
+      },
+      reasoning={},
+      tools=[],
+      temperature=0.7,
+      max_output_tokens=4096,
+      top_p=1,
+      store=True
+    )
+    
+    return response.output[0].content[0].text
 
-def call_nekkollm_api(system_message, user_query):
-    url = GPT_ENDPOINT
-    headers = {  
-        "Content-Type": "application/json",  
-        "api-key": GPT_API
-    }  
-    messages = [
-        {"role": "system", "content": nekkollm_prompt + system_message},
-        {"role": "user", "content": user_query}
-    ]
-    payload = {  
-        "messages": messages,  
-        "temperature": 0.7,  
-        "max_tokens": 4096   
+def call_claude_api(system_message, user_query):
+    # Combine system and user messages
+    messages = system_message + user_query
+
+    # Prepare the request payload
+    payload = {
+        "anthropic_version": "bedrock-2023-05-31",
+        "max_tokens": 4096,
+        "messages": [
+            {
+                "role": "user",
+                "content": messages
+            }
+        ]
     }
-    response = requests.post(url, headers=headers, data=json.dumps(payload))
-    response.raise_for_status()  
-    return response.json()["choices"][0]["message"]["content"]
+
+    try:
+        # Invoke the model (Claude)
+        response = bedrock_runtime2.invoke_model(
+            modelId=INFERENCE_PROFILE_CLAUDE,  # Use the ARN for your inference profile
+            contentType='application/json',
+            accept='application/json',
+            body=json.dumps(payload)
+        )
+
+        # Parse and return the response
+        response_body = json.loads(response['body'].read())
+        return response_body['content'][0]['text']
+
+    except Exception as e:
+        return f"An error occurred: {str(e)}"
+    
+def call_deepseek_api(system_message, user_query):
+    # Combine system and user messages
+    messages = system_message + user_query
+
+    # Prepare the request payload
+    payload = {
+        "max_tokens": 4096,
+        "messages": [
+            {
+                "role": "user",
+                "content": messages
+            }
+        ]
+    }
+
+    try:
+        # Invoke the model (Claude)
+        response = bedrock_runtime2.invoke_model(
+            modelId=INFERENCE_PROFILE_DEEPSEEK,  # Use the ARN for your inference profile
+            contentType='application/json',
+            accept='application/json',
+            body=json.dumps(payload)
+        )
+
+        # Parse and return the response
+        response_body = json.loads(response['body'].read())
+        return response_body["choices"][0]["message"]["content"]
+
+    except Exception as e:
+        return f"An error occurred: {str(e)}"
 
 # Faiss index initialization
 dimension = 768  # Embedding dimension for text embeddings v3
@@ -1304,17 +1396,21 @@ def query_documents_viz(selected_files, selected_page_ranges, query, top_k, web_
         """
         if llm_model=="Claude 3.5 Sonnet":
             answer = call_llm_api(query_prompt, user_query+wsp)
-        elif llm_model=="Model 3":
+        elif llm_model=="GPT 4o":
             answer = call_gpt_api(query_prompt, user_query+wsp)
-        elif llm_model=="Nekko 2":
-            answer = call_nekkollm_api(query_prompt, user_query+wsp)
+        elif llm_model=="Claude 3.7 Sonnet":
+            answer = call_claude_api(query_prompt, user_query+wsp)
+        elif llm_model=="Deepseek R1":
+            answer = call_deepseek_api(query_prompt, user_query+wsp)
     else:
         if llm_model=="Claude 3.5 Sonnet":
             answer = call_llm_api(query_prompt, user_query)
-        elif llm_model=="Model 3":
+        elif llm_model=="GPT 4o":
             answer = call_gpt_api(query_prompt, user_query)
-        elif llm_model=="Nekko 2":
-            answer = call_nekkollm_api(query_prompt, user_query)
+        elif llm_model=="Claude 3.7 Sonnet":
+            answer = call_claude_api(query_prompt, user_query)
+        elif llm_model=="Deepseek R1":
+            answer = call_deepseek_api(query_prompt, user_query)
 
     return answer
 
@@ -1474,17 +1570,21 @@ def query_documents_with_page_range(selected_files, selected_page_ranges, prompt
         """
         if llm_model=="Claude 3.5 Sonnet":
             answer = call_llm_api(system_message, user_query+wsp)
-        elif llm_model=="Model 3":
+        elif llm_model=="GPT 4o":
             answer = call_gpt_api(system_message, user_query+wsp)
-        elif llm_model=="Nekko 2":
-            answer = call_nekkollm_api(system_message, user_query+wsp)
+        elif llm_model=="Claude 3.7 Sonnet":
+            answer = call_claude_api(system_message, user_query+wsp)
+        elif llm_model=="Deepseek R1":
+            answer = call_deepseek_api(system_message, user_query+wsp)
     else:
         if llm_model=="Claude 3.5 Sonnet":
             answer = call_llm_api(system_message, user_query)
-        elif llm_model=="Model 3":
+        elif llm_model=="GPT 4o":
             answer = call_gpt_api(system_message, user_query)
-        elif llm_model=="Nekko 2":
-            answer = call_nekkollm_api(system_message, user_query)
+        elif llm_model=="Claude 3.7 Sonnet":
+            answer = call_claude_api(system_message, user_query)
+        elif llm_model=="Deepseek R1":
+            answer = call_deepseek_api(system_message, user_query)
 
     return top_k_metadata, answer, ws_response
 
