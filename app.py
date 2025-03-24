@@ -498,9 +498,9 @@ prompt_library = {
 }
 
 system_message = """
-    You are a Helpful Legal Data Analyst specializing in legal document analysis. Your task is to do the following:
-    
-    - Your Primary Focus should Always be on how to protect and save the prime accused.
+    You are an advanced legal data analyst specializing in legal document analysis. Provide an in-depth analysis of the provided document text, highlighting anomalies, procedural errors, and legal nuances. Include any supporting legal citations and mention if further clarification is needed.
+    Your task is to do the following:
+
     - Focus on delivering answers that are directly related to the Question, ensuring that the response is as specific and actionable as possible based on the context you retrieve.
     - If the answer is not present in the context or if the query is ambiguous or vague, state that the information cannot be determined or is not available from the document.
     - Always provide any additional insights from the fetched contexts that may be relevant to the question, such as anomalies, contradictions, or key points that could aid in an investigation or analysis.
@@ -743,7 +743,6 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from openai import AzureOpenAI
-from openai import OpenAI
 
 if "Authenticator" not in st.session_state:
     st.session_state["Authenticator"] = None
@@ -791,10 +790,7 @@ SECRETS = load_dict_from_json(secrets_file)
 aws_access_key_id = SECRETS["aws_access_key_id"]
 aws_secret_access_key = SECRETS["aws_secret_access_key"]
 INFERENCE_PROFILE_ARN = SECRETS["INFERENCE_PROFILE_ARN"]
-INFERENCE_PROFILE_CLAUDE = SECRETS["INFERENCE_PROFILE_CLAUDE"]
-INFERENCE_PROFILE_DEEPSEEK = SECRETS["INFERENCE_PROFILE_DEEPSEEK"]
 REGION = SECRETS["REGION"]
-REGION2 = SECRETS["REGION2"]
 GPT_ENDPOINT = SECRETS["GPT_ENDPOINT"]
 GPT_API = SECRETS["GPT_API"]
 DALLE_ENDPOINT = SECRETS["DALLE_ENDPOINT"]
@@ -802,8 +798,6 @@ TAVILY_API = SECRETS["TAVILY_API"]
 WHATSAPP_TOKEN = SECRETS["WHATSAPP_TOKEN"]
 EMAIL_ID = SECRETS["EMAIL_ID"]
 EMAIL_PWD = SECRETS["EMAIL_PWD"]
-# OPENAI_ENDPOINT = SECRETS["OPENAI_ENDPOINT"]
-OPENAI_KEY = SECRETS["OPENAI_KEY"]
 
 # Paths for saving index and metadata
 FAISS_INDEX_PATH = SECRETS["FAISS_INDEX_PATH"]
@@ -825,11 +819,7 @@ def display_logo():
     st.image("logo.png", width=200)
 
 # Create a Bedrock Runtime client
-# bedrock_runtime = boto3.client('bedrock-runtime', region_name=REGION,
-#                               aws_access_key_id=aws_access_key_id,
-#                               aws_secret_access_key=aws_secret_access_key)
-
-bedrock_runtime2 = boto3.client('bedrock-runtime', region_name=REGION2,
+bedrock_runtime = boto3.client('bedrock-runtime', region_name=REGION,
                               aws_access_key_id=aws_access_key_id,
                               aws_secret_access_key=aws_secret_access_key)
 
@@ -1004,7 +994,7 @@ def call_llm_api(system_message, user_query):
 
     try:
         # Invoke the model (Claude)
-        response = bedrock_runtime2.invoke_model(
+        response = bedrock_runtime.invoke_model(
             modelId=INFERENCE_PROFILE_ARN,  # Use the ARN for your inference profile
             contentType='application/json',
             accept='application/json',
@@ -1019,125 +1009,42 @@ def call_llm_api(system_message, user_query):
         return f"An error occurred: {str(e)}"
     
 def call_gpt_api(system_message, user_query):
-    # url = GPT_ENDPOINT
-    # headers = {  
-    #     "Content-Type": "application/json",  
-    #     "api-key": GPT_API
-    # }  
-    # messages = [
-    #     {"role": "system", "content": system_message},
-    #     {"role": "user", "content": user_query}
-    # ]
-    # payload = {  
-    #     "messages": messages,  
-    #     "temperature": 0.7,  
-    #     "max_tokens": 4096   
-    # }
-    # response = requests.post(url, headers=headers, data=json.dumps(payload))
-    # response.raise_for_status()  
-    # return response.json()["choices"][0]["message"]["content"]
-    
-    client = OpenAI(api_key = OPENAI_KEY)
-    
-    response = client.responses.create(
-      model="gpt-4o",
-      input=[
-        {
-          "role": "system",
-          "content": [
-            {
-              "type": "input_text",
-              "text": system_message
-            }
-          ]
-        },
-        {
-          "role": "user",
-          "content": [
-            {
-              "type": "input_text",
-              "text": user_query
-            }
-          ]
-        }
-      ],
-      text={
-        "format": {
-          "type": "text"
-        }
-      },
-      reasoning={},
-      tools=[],
-      temperature=0.7,
-      max_output_tokens=4096,
-      top_p=1,
-      store=True
-    )
-    
-    return response.output[0].content[0].text
-
-def call_claude_api(system_message, user_query):
-    # Combine system and user messages
-    messages = system_message + user_query
-
-    # Prepare the request payload
-    payload = {
-        "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 4096,
-        "messages": [
-            {
-                "role": "user",
-                "content": messages
-            }
-        ]
+    url = GPT_ENDPOINT
+    headers = {  
+        "Content-Type": "application/json",  
+        "api-key": GPT_API
+    }  
+    messages = [
+        {"role": "system", "content": system_message},
+        {"role": "user", "content": user_query}
+    ]
+    payload = {  
+        "messages": messages,  
+        "temperature": 0.7,  
+        "max_tokens": 4096   
     }
+    response = requests.post(url, headers=headers, data=json.dumps(payload))
+    response.raise_for_status()  
+    return response.json()["choices"][0]["message"]["content"]
 
-    try:
-        # Invoke the model (Claude)
-        response = bedrock_runtime2.invoke_model(
-            modelId=INFERENCE_PROFILE_CLAUDE,  # Use the ARN for your inference profile
-            contentType='application/json',
-            accept='application/json',
-            body=json.dumps(payload)
-        )
-
-        # Parse and return the response
-        response_body = json.loads(response['body'].read())
-        return response_body['content'][0]['text']
-
-    except Exception as e:
-        return f"An error occurred: {str(e)}"
-    
-def call_deepseek_api(system_message, user_query):
-    # Combine system and user messages
-    messages = system_message + user_query
-
-    # Prepare the request payload
-    payload = {
-        "max_tokens": 4096,
-        "messages": [
-            {
-                "role": "user",
-                "content": messages
-            }
-        ]
+def call_nekkollm_api(system_message, user_query):
+    url = GPT_ENDPOINT
+    headers = {  
+        "Content-Type": "application/json",  
+        "api-key": GPT_API
+    }  
+    messages = [
+        {"role": "system", "content": nekkollm_prompt + system_message},
+        {"role": "user", "content": user_query}
+    ]
+    payload = {  
+        "messages": messages,  
+        "temperature": 0.7,  
+        "max_tokens": 4096   
     }
-
-    try:
-        # Invoke the model (Claude)
-        response = bedrock_runtime2.invoke_model(
-            modelId=INFERENCE_PROFILE_DEEPSEEK,  # Use the ARN for your inference profile
-            contentType='application/json',
-            accept='application/json',
-            body=json.dumps(payload)
-        )
-
-        # Parse and return the response
-        response_body = json.loads(response['body'].read())
-        return response_body["choices"][0]["message"]["content"]
-
-    except Exception as e:
-        return f"An error occurred: {str(e)}"
+    response = requests.post(url, headers=headers, data=json.dumps(payload))
+    response.raise_for_status()  
+    return response.json()["choices"][0]["message"]["content"]
 
 # Faiss index initialization
 dimension = 768  # Embedding dimension for text embeddings v3
@@ -1254,6 +1161,21 @@ def chunk_text(pages_text, chunk_size=1):
 
     return chunks
 
+def delete_file(file_name):
+    try:
+        # Delete from Azure Blob Storage:
+        blob_service_client = BlobServiceClient.from_connection_string(connection_string)
+        blob_client = blob_service_client.get_blob_client(container=s3_bucket_name, blob=file_name)
+        blob_client.delete_blob()
+        st.success(f"Deleted file '{file_name}' from Blob Storage.")
+    except Exception as e:
+        st.error(f"Error deleting file: {str(e)}")
+    
+    # Remove the file from metadata_store (filter out all records with that filename)
+    global metadata_store
+    metadata_store = [md for md in metadata_store if md["filename"] != file_name]
+    # Optionally, update your index if needed and re-save metadata:
+    save_index_and_metadata()
 
 def add_pdf_to_index(pdf_file):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_pdf:
@@ -1278,8 +1200,10 @@ def add_pdf_to_index(pdf_file):
             metadata_store.append({
                 "filename": os.path.basename(pdf_file.name),
                 "page": page_num,
-                "text": page_content
-            })
+                "text": page_content,
+                "owner": st.session_state.get("username", "unknown"),  # Save the uploader’s username
+                "shared_with": [] 
+            })            
             
             # Update progress bar and clear previous message after updating
             progress_bar.progress(page_num / total_pages)  # Update to reflect current page
@@ -1373,19 +1297,24 @@ def query_documents_viz(selected_files, selected_page_ranges, query, top_k, web_
 
         print(ws_response)
 
-    wsp = f"""
-    # Feel free to use the Web Search Results for Additional Context as well:
+        wsp = f"""
+        # Feel free to use the Web Search Results for Additional Context as well:
 
-    {json.dumps(ws_response)}
-    """
-    if llm_model=="Claude 3.5 Sonnet":
-        answer = call_llm_api(query_prompt, user_query+wsp)
-    elif llm_model=="GPT 4o":
-        answer = call_gpt_api(query_prompt, user_query+wsp)
-    elif llm_model=="Claude 3.7 Sonnet":
-        answer = call_claude_api(query_prompt, user_query+wsp)
-    elif llm_model=="Deepseek R1":
-        answer = call_deepseek_api(query_prompt, user_query+wsp)
+        {json.dumps(ws_response)}
+        """
+        if llm_model=="Claude 3.5 Sonnet":
+            answer = call_llm_api(query_prompt, user_query+wsp)
+        elif llm_model=="Model 3":
+            answer = call_gpt_api(query_prompt, user_query+wsp)
+        elif llm_model=="Nekko 2":
+            answer = call_nekkollm_api(query_prompt, user_query+wsp)
+    else:
+        if llm_model=="Claude 3.5 Sonnet":
+            answer = call_llm_api(query_prompt, user_query)
+        elif llm_model=="Model 3":
+            answer = call_gpt_api(query_prompt, user_query)
+        elif llm_model=="Nekko 2":
+            answer = call_nekkollm_api(query_prompt, user_query)
 
     return answer
 
@@ -1410,6 +1339,7 @@ def query_documents_with_page_range(selected_files, selected_page_ranges, prompt
     '''
 
     prompts = call_llm_api(qp_prompt["system_message"], qp_prompt["user_query"]+op_format)
+    print(prompts)
     try:
         # return json.loads(answer[7:-3])
         prompt_op = json.loads(prompts.split("```json")[1].split("```")[0])
@@ -1464,6 +1394,7 @@ def query_documents_with_page_range(selected_files, selected_page_ranges, prompt
             "1. Review the User Query, Document Context, and Conversation History.\n"
             "2. Generate a bullet list of key topics for the document.\n"
             "3. For each topic, draft a detailed section ensuring continuity and avoiding repetition.\n\n"
+            "4. Always present your outputs in Proper Markdown Formatting"
             "-----\n"
             "User Query:\n"
             f"{prompt}\n"
@@ -1478,8 +1409,9 @@ def query_documents_with_page_range(selected_files, selected_page_ranges, prompt
 
         # Step 1: Generate bullet list of topics.
         bullet_prompt = (
-            "Based on the above, generate a bullet list of key topics for drafting a legal document. "
+            "Based on the above, generate a detailed bullet list of topics for drafting a document. (Like a Table of Contents)"
             "Each topic should appear on its own line, starting with a dash (-)."
+            "Adhere to the conversation and context to understand what formatting and style you should follow and what content you should present."
         )
         topics_response = call_llm_api(sys_msg, bullet_prompt)
         topics = [line.lstrip(" -").strip() for line in topics_response.split("\n") if line.strip()]
@@ -1495,6 +1427,7 @@ def query_documents_with_page_range(selected_files, selected_page_ranges, prompt
                 "2. The draft generated so far:\n"
                 f"{final_draft}\n"
                 "3. Make sure not to repeat information already included in previous sections.\n"
+                "4. Adhere to the conversation and context to understand what formatting and style you should follow and what content you should present."
             )
             detailed_response = call_llm_api(sys_msg, elaboration_prompt)
             final_draft += f"\n\n# {topic}:\n{detailed_response}"
@@ -1504,7 +1437,6 @@ def query_documents_with_page_range(selected_files, selected_page_ranges, prompt
 
 
     user_query = f"""
-    You are required to provide a structured response to the following question, based on the context retrieved from the provided documents.
 
     # User Query:
     <<<{prompt}>>>
@@ -1514,11 +1446,6 @@ def query_documents_with_page_range(selected_files, selected_page_ranges, prompt
 
     # The last few messages of the conversation to help you maintain continuity and relevance:
     {json.dumps(last_messages)}
-
-    # Always Approach the Task Step by Step.
-    * Read and Understand the Provided Contexts.
-    * Identify Relevant sections from those and Arrange them as necessary
-    * Then Formulate your Answer Adhering to the Guidelines.
     """
 
     ws_response = ""
@@ -1539,20 +1466,25 @@ def query_documents_with_page_range(selected_files, selected_page_ranges, prompt
 
         print(ws_response)
 
-    wsp = f"""
-    # Feel free to use the Web Search Results for Additional Context as well:
-    Please ensure your output is concise, well-organized, and each resource hyperlink is clickable. Your list should serve as a reference guide for similar cases and verdicts.
+        wsp = f"""
+        # Feel free to use the Web Search Results for Additional Context as well:
+        Please ensure your output is concise, well-organized, and each resource hyperlink is clickable. Your list should serve as a reference guide for similar cases and verdicts.
 
-    {json.dumps(ws_response)}
-    """
-    if llm_model=="Claude 3.5 Sonnet":
-        answer = call_llm_api(system_message, user_query+wsp)
-    elif llm_model=="GPT 4o":
-        answer = call_gpt_api(system_message, user_query+wsp)
-    elif llm_model=="Claude 3.7 Sonnet":
-        answer = call_claude_api(system_message, user_query+wsp)
-    elif llm_model=="Deepseek R1":
-        answer = call_deepseek_api(system_message, user_query+wsp)
+        {json.dumps(ws_response)}
+        """
+        if llm_model=="Claude 3.5 Sonnet":
+            answer = call_llm_api(system_message, user_query+wsp)
+        elif llm_model=="Model 3":
+            answer = call_gpt_api(system_message, user_query+wsp)
+        elif llm_model=="Nekko 2":
+            answer = call_nekkollm_api(system_message, user_query+wsp)
+    else:
+        if llm_model=="Claude 3.5 Sonnet":
+            answer = call_llm_api(system_message, user_query)
+        elif llm_model=="Model 3":
+            answer = call_gpt_api(system_message, user_query)
+        elif llm_model=="Nekko 2":
+            answer = call_nekkollm_api(system_message, user_query)
 
     return top_k_metadata, answer, ws_response
 
@@ -1579,61 +1511,49 @@ def final_format(top_k_metadata, answer, ws_response):
         
     """
 
-    # final_op_format = '''
-    #     For Transparency and Explanability, we Would like you to do the following:
-    #         1. Break the Answer into Logical Shards.
-    #         2. For Each Shard, Map them to the Relevant Sources (From the Provided TopK Context) in the Formatting as Presented below
-        
-    #     Note: The Shards when concatenated should help us regenerate the provided `Generated Answer`
-    #     Approach the Above Step by Step.
-
-    #     # Final Output Format:
-    #     ```
-    #     {
-    #         "segmented_answer":    
-    #             [
-    #                 {
-    #                     "section": "The first shard of the generated answer",
-    #                     "sources": [
-    #                                     {"filename": "The First Filename", "page": "page_num", "text": "The Relevant text from the page only"},
-    #                                     {"filename": "The Second Filename", "page": "page_num", "text": "The Relevant text from the page only"},
-    #                                     . # Add more sources if necessary
-    #                                 ]
-    #                 },
-    #                 {
-    #                     "section": "The second part of the generated answer", 
-    #                     "sources": [
-    #                                     {"filename": "The First Filename", "page": "page_num", "text": "The Relevant text from the page only"},
-    #                                     {"filename": "The Second Filename", "page": "page_num", "text": "The Relevant text from the page only"},
-    #                                     . # Add more sources if necessary
-    #                                 ]
-    #                 },
-    #                 .
-    #                 .
-    #             ]
-    #     }
-    #     ```
-    # '''
-
-
     final_op_format = '''
         For Transparency and Explanability, we Would like you to do the following:
             1. Break the Answer into Logical Shards.
-            2. For Each Shard, Map them to the Relevant Sources (From the Provided TopK Context, Web Search Results and more)
+            2. For Each Shard, Map them to the Relevant Sources (From the Provided TopK Context) in the Formatting as Presented below
         
         Note: The Shards when concatenated should help us regenerate the provided `Generated Answer`
         Approach the Above Step by Step.
-    '''
 
+        # Final Output Format:
+        ```
+        {
+            "segmented_answer":    
+                [
+                    {
+                        "section": "The first shard of the generated answer",
+                        "sources": [
+                                        {"filename": "The First Filename", "page": "page_num", "text": "The Relevant text from the page only"},
+                                        {"filename": "The Second Filename", "page": "page_num", "text": "The Relevant text from the page only"},
+                                        . # Add more sources if necessary
+                                    ]
+                    },
+                    {
+                        "section": "The second part of the generated answer", 
+                        "sources": [
+                                        {"filename": "The First Filename", "page": "page_num", "text": "The Relevant text from the page only"},
+                                        {"filename": "The Second Filename", "page": "page_num", "text": "The Relevant text from the page only"},
+                                        . # Add more sources if necessary
+                                    ]
+                    },
+                    .
+                    .
+                ]
+        }
+        ```
+    '''
     # Call the LLM API to get the answer
     answer = call_llm_api(sys_msg, input_context+final_op_format)
-    # try:
-    #     # return json.loads(answer[7:-3])
-    #     return json.loads(answer.split("```json")[1].split("```")[0])
-    # except:
-    #     # return json.loads(answer[3:-3])
-    #     return json.loads(answer.split("```")[1].split("```")[0])
-    return answer
+    try:
+        # return json.loads(answer[7:-3])
+        return json.loads(answer.split("```json")[1].split("```")[0])
+    except:
+        # return json.loads(answer[3:-3])
+        return json.loads(answer.split("```")[1].split("```")[0])
     
 def summarize_document_pages(filename, start_page, end_page, summary_prompt):
     """
@@ -1925,7 +1845,9 @@ def process_pdf(pdf_file):
         metadata_store.append({
             "filename": os.path.basename(pdf_file.name),
             "page": page_num,
-            "text": page_content
+            "text": page_content,
+            "owner": st.session_state.get("username", "unknown"),  # Save the uploader’s username
+            "shared_with": [] 
         })
         progress_bar.progress(page_num / total_pages)
     
@@ -1967,7 +1889,9 @@ def process_image(image_file):
     metadata_store.append({
         "filename": os.path.basename(image_file.name),
         "page": 1,  # Only one "page" for an image
-        "text": text
+        "text": text,
+        "owner": st.session_state.get("username", "unknown"),  # Save the uploader’s username
+        "shared_with": [] 
     })
     save_index_and_metadata()
     try:
@@ -1995,7 +1919,9 @@ def process_docx(docx_file):
             metadata_store.append({
                 "filename": os.path.basename(docx_file.name),
                 "page": idx,
-                "text": chunk
+                "text": chunk,
+                "owner": st.session_state.get("username", "unknown"),  # Save the uploader’s username
+                "shared_with": [] 
             })
     except Exception as e:
         st.error(f"Error processing DOCX: {str(e)}")
@@ -2016,7 +1942,9 @@ def process_pptx(pptx_file):
             metadata_store.append({
                 "filename": os.path.basename(pptx_file.name),
                 "page": idx,  # Slide number
-                "text": slide_text
+                "text": slide_text,
+                "owner": st.session_state.get("username", "unknown"),  # Save the uploader’s username
+                "shared_with": [] 
             })
     except Exception as e:
         st.error(f"Error processing PPTX: {str(e)}")
@@ -2049,7 +1977,9 @@ def process_spreadsheet(file_obj):
         metadata_store.append({
             "filename": f"{os.path.basename(file_obj.name)} ({sheet_name})",
             "page": i + 1,  # Store as an integer instead of "chunk_{i+1}"
-            "text": chunk_text
+            "text": chunk_text,
+            "owner": st.session_state.get("username", "unknown"),  # Save the uploader’s username
+            "shared_with": [] 
         })
     save_index_and_metadata()
 
@@ -2176,7 +2106,7 @@ def main():
         logout()  # Display the logout button in the sidebar
 
     st.sidebar.header("Options")
-    option = st.sidebar.selectbox("Choose an option", ["Query Documents", "Query Advanced", "Taskmeister", "Upload Documents", "Usage Monitoring"])
+    option = st.sidebar.selectbox("Choose an option", ["Query Documents", "Query Advanced", "Taskmeister", "Upload Documents", "File Manager", "Usage Monitoring"])
 
     if option == "Upload Documents":
         st.header("Upload Documents")
@@ -2195,11 +2125,46 @@ def main():
                     add_file_to_index(uploaded_file)
                     st.success(f"File '{uploaded_file.name}' has been successfully uploaded and added to the index.")
 
+    elif option == "File Manager":
+        available_usernames = list(USERS.keys())
+        st.header("My Uploaded Files")
+        # Filter files for the current user (see user isolation in step 2)
+        current_user = st.session_state.get("username", "unknown")
+        available_files = list({
+            md["filename"] 
+            for md in metadata_store 
+            if md.get("owner") == current_user or current_user in md.get("shared_with", [])
+        })
+        if available_files:
+            if available_files:
+                for i, fname in enumerate(available_files):
+                    col1, col2 = st.columns([0.7, 0.3])
+                    with col1:
+                        st.write(fname)
+                    with col2:
+                        if st.button("Delete", key=f"del_{fname}_{i}"):
+                            delete_file(fname)
+        else:
+            st.sidebar.info("No files uploaded yet.")
+
+        # In the File Manager section:
+        st.sidebar.header("Share a File")
+        file_to_share = st.sidebar.selectbox("Select a file to share", available_files)
+        share_with = st.sidebar.multiselect("Select user(s) to share with", options=available_usernames)
+
+        if st.sidebar.button("Share File"):
+            # Update metadata for the file if the current user is the owner
+            for md in metadata_store:
+                if md["filename"] == file_to_share and md.get("owner") == current_user:
+                    md.setdefault("shared_with", []).extend(share_with)
+                    md["shared_with"] = list(set(md["shared_with"]))  # Remove duplicates
+                    st.success(f"Shared {file_to_share} with {', '.join(share_with)}")
+            save_index_and_metadata()
 
     elif option == "Query Documents":
         st.header("Query Documents")
         st.sidebar.header("Settings")
-        llm_model = st.sidebar.selectbox("Choose Your Model", ["Claude 3.7 Sonnet", "Claude 3.5 Sonnet", "Deepseek R1", "GPT 4o"])
+        llm_model = st.sidebar.selectbox("Choose Your Model", ["Nekko 2", "Claude 3.5 Sonnet", "Model 3"])
 
         # "New Chat" button resets conversation and state.
         if st.sidebar.button("New Chat"):
@@ -2217,7 +2182,16 @@ def main():
         top_k = st.sidebar.slider("Select Top-K Results", min_value=1, max_value=100, value=50, step=1)
 
         # File and Page Range Selection
-        available_files = list(set([metadata['filename'] for metadata in metadata_store]))
+        # available_files = list(set([metadata['filename'] for metadata in metadata_store]))
+        current_user = st.session_state.get("username", "unknown")
+        # Only include files where the owner is the current user or shared with the user.
+        available_files = list({
+            md["filename"] 
+            for md in metadata_store 
+            if md.get("owner") == current_user or current_user in md.get("shared_with", [])
+        })
+
+
         if available_files:
             # Use multiselect and store the selection in session state.
             st.session_state.selected_files = st.multiselect(
@@ -2313,7 +2287,7 @@ def main():
         if st.sidebar.toggle("Rename Conversation"):
             for idx, conv in enumerate(unique_conversations):
                 # Use the custom label if available; otherwise, use a preview of the first message.
-                default_label = conv.get("label") or conv.get('messages', [{}])[0].get("content", "")[:20]
+                default_label = conv.get("label") or conv.get('messages', [{}])[0].get("content", "")[:50]
                 
                 # Create two columns: one for selecting the conversation, one for renaming it.
                 col1, col2 = st.sidebar.columns([2, 1])
@@ -2353,16 +2327,16 @@ def main():
                     save_chat_history(st.session_state.chat_history)
                     st.sidebar.success("Conversation renamed!")
                     # Force a full rerun so updated labels and keys are used.
-                    st.rerun()
+                    st.experimental_rerun()
         else:
+
 
             for idx, conv in enumerate(unique_conversations):
                 # The first line of the conversation becomes the label if no 'label' set
-                conv_label = conv.get("label") or conv.get('messages', [{}])[0].get("content", "")[:20]
+                conv_label = conv.get("label") or conv.get('messages', [{}])[0].get("content", "")[:50]
                 
                 # Use two columns in the sidebar
-                # col1, col2 = st.sidebar.columns([0.9, 0.1], gap="small")
-                col1, col2 = st.sidebar.columns([0.9, 0.1])
+                col1, col2 = st.sidebar.columns([0.9, 0.1], gap="small")
 
                 # "Load" button in the first column
                 if col1.button(conv_label, key=f"conv_load_{idx}"):
@@ -2606,13 +2580,22 @@ def main():
     elif option == "Query Advanced":
         st.header("Query Advanced")
         st.sidebar.header("Settings")
-        llm_model = st.sidebar.selectbox("Choose Your Model", ["Claude 3.7 Sonnet", "Claude 3.5 Sonnet", "Deepseek R1", "GPT 4o"])
+        llm_model = st.sidebar.selectbox("Choose Your Model", ["Nekko 2", "Claude 3.5 Sonnet", "Model 3"])
 
         web_search = st.sidebar.toggle("Enable Web Search")
         top_k = st.sidebar.slider("Select Top-K Results", min_value=1, max_value=100, value=50, step=1)
 
         # File and Page Range Selection
-        available_files = list(set([metadata['filename'] for metadata in metadata_store]))
+        # available_files = list(set([metadata['filename'] for metadata in metadata_store]))
+        current_user = st.session_state.get("username", "unknown")
+        # Only include files where the owner is the current user or shared with the user.
+        available_files = list({
+            md["filename"] 
+            for md in metadata_store 
+            if md.get("owner") == current_user or current_user in md.get("shared_with", [])
+        })
+
+
         if available_files:
             # Use multiselect and store the selection in session state.
             st.session_state.selected_files = st.multiselect(
