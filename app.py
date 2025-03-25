@@ -3067,16 +3067,29 @@ def main():
             st.write("**Email Sharing Results:**", email_results)
 
     elif option == "Usage Monitoring":
-        st.header("Usage Monitoring - Last 30 Days")
+        st.header("Usage Monitoring")
         
+        # Add a dropdown in the sidebar for period selection
+        period_options = ["Last 3 Days", "Last 7 Days", "Last 14 Days", "Last 1 Month", "Last 3 Months"]
+        selected_period = st.sidebar.selectbox("Select Period", period_options, index=3)  # default to Last 1 Month
+        # Map each option to the corresponding number of days
+        period_days = {
+            "Last 3 Days": 3,
+            "Last 7 Days": 7,
+            "Last 14 Days": 14,
+            "Last 1 Month": 30,
+            "Last 3 Months": 90
+        }
+        selected_days = period_days[selected_period]
+        st.subheader(f"Usage Monitoring - {selected_period}")
+
         # Load the chat history (this is a dict with keys as usernames)
         chat_history = load_chat_history()
-        
+
         # Create a list of records: each record is { 'user': ..., 'timestamp': ... }
         records = []
         for user, conversations in chat_history.items():
             for conv in conversations:
-                # Assume each conversation has a 'timestamp' field
                 timestamp_str = conv.get("timestamp")
                 if timestamp_str:
                     try:
@@ -3084,37 +3097,41 @@ def main():
                         records.append({"user": user, "timestamp": ts})
                     except Exception as e:
                         st.warning(f"Timestamp format error for user {user}: {e}")
-        
+
         if not records:
             st.info("No usage data available.")
         else:
             # Convert records to a Pandas DataFrame
             df = pd.DataFrame(records)
-            
-            # Filter for the last 30 days
+
+            # Filter for the selected period
             today = datetime.today()
-            start_date = today - timedelta(days=30)
-            df_last30 = df[df["timestamp"] >= start_date]
-            
+            start_date = today - timedelta(days=selected_days)
+            df_period = df[df["timestamp"] >= start_date]
+
             # --- Bar Graph: Total Queries per User ---
-            user_counts = df_last30.groupby("user").size().reset_index(name="queries")
-            bar_fig = px.bar(user_counts, x="user", y="queries",
-                            title="Total Queries per User (Last 30 Days)",
-                            labels={"user": "User", "queries": "Number of Queries"})
+            user_counts = df_period.groupby("user").size().reset_index(name="queries")
+            bar_fig = px.bar(
+                user_counts, 
+                x="user", 
+                y="queries",
+                title=f"Total Queries per User ({selected_period})",
+                labels={"user": "User", "queries": "Number of Queries"}
+            )
             st.plotly_chart(bar_fig, use_container_width=True)
-            
+
             # --- Line Graph: Day-wise Queries per User with Moving Average ---
-            # Create a 'date' column (date only, no time)
-            df_last30["date"] = df_last30["timestamp"].dt.date
-            
+            # Create a 'date' column (date only)
+            df_period["date"] = df_period["timestamp"].dt.date
+
             # Count queries per user per day
-            daily_counts = df_last30.groupby(["user", "date"]).size().reset_index(name="queries")
-            
-            # Create a complete date range for the last 30 days
+            daily_counts = df_period.groupby(["user", "date"]).size().reset_index(name="queries")
+
+            # Create a complete date range for the selected period
             date_range = pd.date_range(start=start_date.date(), end=today.date())
             all_users = daily_counts["user"].unique()
             complete_data = []
-            
+
             for user in all_users:
                 user_df = daily_counts[daily_counts["user"] == user].copy()
                 user_df.set_index("date", inplace=True)
@@ -3122,22 +3139,31 @@ def main():
                 user_df = user_df.reindex(date_range, fill_value=0)
                 user_df = user_df.rename_axis("date").reset_index()
                 user_df["user"] = user
-                # Calculate a 30-day moving average (for available data)
-                user_df["moving_avg"] = user_df["queries"].rolling(window=30, min_periods=1).mean()
+                # Calculate a moving average using the selected period as window
+                user_df["moving_avg"] = user_df["queries"].rolling(window=selected_days, min_periods=1).mean()
                 complete_data.append(user_df)
-            
+
             daily_all = pd.concat(complete_data, ignore_index=True)
-            
+
             # Create the line graph with one line per user
-            line_fig = px.line(daily_all, x="date", y="queries", color="user",
-                            title="Daily Queries per User (Last 30 Days)",
-                            labels={"date": "Date", "queries": "Number of Queries"})
+            line_fig = px.line(
+                daily_all, 
+                x="date", 
+                y="queries", 
+                color="user",
+                title=f"Daily Queries per User ({selected_period})",
+                labels={"date": "Date", "queries": "Number of Queries"}
+            )
             # Add moving average lines for each user
             for user in all_users:
                 user_data = daily_all[daily_all["user"] == user]
-                line_fig.add_trace(go.Scatter(x=user_data["date"], y=user_data["moving_avg"],
-                                            mode="lines", name=f"{user} - 30-Day MA"))
-            
+                line_fig.add_trace(go.Scatter(
+                    x=user_data["date"], 
+                    y=user_data["moving_avg"],
+                    mode="lines", 
+                    name=f"{user} - {selected_period} MA"
+                ))
+
             st.plotly_chart(line_fig, use_container_width=True)
 
     else:
