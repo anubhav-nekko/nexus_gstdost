@@ -2264,7 +2264,7 @@ def main():
     elif option == "Query Documents":
         st.header("Query Documents")
         st.sidebar.header("Settings")
-        llm_model = st.sidebar.selectbox("Choose Your Model", ["Nekko 2", "Claude 3.5 Sonnet", "Model 3"])
+        llm_model = st.sidebar.selectbox("Choose Your Model", ["Claude 3.7 Sonnet", "Claude 3.5 Sonnet", "Deepseek R1", "GPT 4o"])
 
         # "New Chat" button resets conversation and state.
         if st.sidebar.button("New Chat"):
@@ -2680,7 +2680,7 @@ def main():
     elif option == "Query Advanced":
         st.header("Query Advanced")
         st.sidebar.header("Settings")
-        llm_model = st.sidebar.selectbox("Choose Your Model", ["Nekko 2", "Claude 3.5 Sonnet", "Model 3"])
+        llm_model = st.sidebar.selectbox("Choose Your Model", ["Claude 3.7 Sonnet", "Claude 3.5 Sonnet", "Deepseek R1", "GPT 4o"])
 
         web_search = st.sidebar.toggle("Enable Web Search")
         top_k = st.sidebar.slider("Select Top-K Results", min_value=1, max_value=100, value=50, step=1)
