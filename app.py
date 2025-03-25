@@ -1414,6 +1414,181 @@ def query_documents_viz(selected_files, selected_page_ranges, query, top_k, web_
 
     return answer
 
+# def query_documents_with_page_range(selected_files, selected_page_ranges, prompt, top_k, last_messages, web_search, llm_model, draft_mode, analyse_mode):
+#     # print(selected_files)
+#     # print(selected_page_ranges)
+
+#     qp_prompt = {
+#         "system_message": "You are an intelligent query refiner. Your job is to take a user's original query (which may contain poor grammar or informal language) along with the last 5 messages of the conversation and generate two well-formed prompts: one for a semantic search over a FAISS index and another for a web search. The semantic search prompt should improve the user's provided query, incorporating the last 5 messages for better contextual understanding. The web search prompt should refine the query further to fetch relevant legal resources online. Output only a JSON object with 'semantic_search_prompt' and 'web_search_prompt' as keys.",
+#         "user_query": f"User Query: {prompt}\n\nLast 5 Messages: {last_messages}\n\nGenerate the JSON output with the two improved prompts."
+#     }
+
+#     op_format = '''
+#     # Output Format:
+    
+#     ```json
+#     {
+#         "semantic_search_prompt": "Refined user query using proper grammar and context from last 5 messages, optimized for FAISS index retrieval.",
+#         "web_search_prompt": "Further refined query designed to fetch relevant legal resources from the web."
+#     }
+#     ```
+#     '''
+
+#     prompts = call_llm_api(qp_prompt["system_message"], qp_prompt["user_query"]+op_format)
+#     print(prompts)
+#     try:
+#         # return json.loads(answer[7:-3])
+#         prompt_op = json.loads(prompts.split("```json")[1].split("```")[0])
+#     except:
+#         # return json.loads(answer[3:-3])
+#         try:
+#             prompt_op = json.loads(prompts)
+#         except:
+#             prompt_op = json.loads(prompts.split("```")[1].split("```")[0])
+#     print(prompt_op)
+#     query = prompt_op["semantic_search_prompt"]
+
+#     query_embedding = generate_titan_embeddings(query).reshape(1, -1)
+#     if faiss_index.ntotal == 0:
+#         st.error("The FAISS index is empty. Please upload a PDF to populate the index.")
+#         return [], "No data available to query."
+
+#     # Fetch all metadata for the given query
+#     k = faiss_index.ntotal  # Initial broad search
+#     distances, indices = faiss_index.search(query_embedding, k)
+    
+#     filtered_results = []
+#     for dist, idx in zip(distances[0], indices[0]):
+#         if idx < len(metadata_store):
+#             metadata = metadata_store[idx]
+#             if metadata['filename'] in selected_files:
+#                 min_page, max_page = selected_page_ranges.get(metadata['filename'], (None, None))
+#                 if min_page and max_page and min_page <= metadata['page'] <= max_page:
+#                     filtered_results.append((dist, idx))
+    
+#     # Limit to topK after filtering
+#     top_k_results = sorted(filtered_results, key=lambda x: x[0])[:top_k]
+#     top_k_metadata = [metadata_store[idx] for _, idx in top_k_results]
+
+#     if analyse_mode:
+#         summaries = []
+#         for idx, file in enumerate(selected_files):
+#                 # Get the page range for the file.
+#                 min_page, max_page = selected_page_ranges.get(file, (None, None))
+#                 if min_page is not None and max_page is not None:
+#                     # Use the summary prompt as the system message (you may have a variable 'summary_prompt' already defined).
+#                     summary = summarize_document_pages(file, min_page, max_page, summary_prompt)
+#                     summaries.append({file: summary})
+#                     # with cols[idx]:
+#         top_k_metadata = summaries
+
+#     if draft_mode:
+#         # Construct a structured system message with clear sections.
+#         sys_msg = (
+#             "You are a Helpful Legal Data Analyst specializing in legal document analysis.\n"
+#             "Your task is to draft a legal document/ text/ article based on the following inputs. Follow these steps:\n"
+#             "1. Review the User Query, Document Context, and Conversation History.\n"
+#             "2. Generate a bullet list of key topics for the document.\n"
+#             "3. For each topic, draft a detailed section ensuring continuity and avoiding repetition.\n\n"
+#             "4. Always present your outputs in Proper Markdown Formatting"
+#             "-----\n"
+#             "User Query:\n"
+#             f"{prompt}\n"
+#             "-----\n"
+#             "Document Context (Top K relevant):\n"
+#             f"{json.dumps(top_k_metadata, indent=2)}\n"
+#             "-----\n"
+#             "Conversation History (Last few messages):\n"
+#             f"{json.dumps(last_messages, indent=2)}\n"
+#             "-----\n"
+#         )
+
+#         # Step 1: Generate bullet list of topics.
+#         bullet_prompt = (
+#             "Based on the above, generate a detailed bullet list of topics for drafting a document. (Like a Table of Contents)"
+#             "Each topic should appear on its own line, starting with a dash (-)."
+#             "Adhere to the conversation and context to understand what formatting and style you should follow and what content you should present."
+#         )
+#         topics_response = call_llm_api(sys_msg, bullet_prompt)
+#         topics = [line.lstrip(" -").strip() for line in topics_response.split("\n") if line.strip()]
+#         total_topics = len(topics)
+
+#         final_draft = ""
+#         # Draft each topic section iteratively with a progress message.
+#         for index, topic in enumerate(topics, start=1):
+#             elaboration_prompt = (
+#                 f"Draft a detailed section for the topic: '{topic}'.\n\n"
+#                 "Use the following context to ensure continuity:\n"
+#                 "1. The User Query and Document Context provided above.\n"
+#                 "2. The draft generated so far:\n"
+#                 f"{final_draft}\n"
+#                 "3. Make sure not to repeat information already included in previous sections.\n"
+#                 "4. Adhere to the conversation and context to understand what formatting and style you should follow and what content you should present."
+#             )
+#             detailed_response = call_llm_api(sys_msg, elaboration_prompt)
+#             final_draft += f"\n\n# {topic}:\n{detailed_response}"
+#             st.info(f"Drafting for topic {index}/{total_topics} ({topic}) completed.")
+
+#         return [], final_draft, ""
+
+
+#     user_query = f"""
+
+#     # User Query:
+#     <<<{prompt}>>>
+
+#     # The top K most relevant contexts fetched from the documents are as follows:
+#     {json.dumps(top_k_metadata, indent=4)}
+
+#     # The last few messages of the conversation to help you maintain continuity and relevance:
+#     {json.dumps(last_messages)}
+#     """
+
+#     ws_response = ""
+
+#     if web_search or analyse_mode:
+#         ws_query = prompt_op["web_search_prompt"]
+#         # Call the LLM API to get the answer
+#         # To install, run: pip install tavily-python
+
+
+#         client = TavilyClient(api_key=TAVILY_API)
+
+#         ws_response = client.search(
+#             query=ws_query,
+#             search_depth="advanced",
+#             include_raw_content=True
+#         )
+
+#         print(ws_response)
+
+#         wsp = f"""
+#         # Feel free to use the Web Search Results for Additional Context as well:
+#         Please ensure your output is concise, well-organized, and each resource hyperlink is clickable. Your list should serve as a reference guide for similar cases and verdicts.
+
+#         {json.dumps(ws_response)}
+#         """
+#         if llm_model=="Claude 3.5 Sonnet":
+#             answer = call_llm_api(system_message, user_query+wsp)
+#         elif llm_model=="GPT 4o":
+#             answer = call_gpt_api(system_message, user_query+wsp)
+#         elif llm_model=="Claude 3.7 Sonnet":
+#             answer = call_claude_api(system_message, user_query+wsp)
+#         elif llm_model=="Deepseek R1":
+#             answer = call_deepseek_api(system_message, user_query+wsp)
+#     else:
+#         if llm_model=="Claude 3.5 Sonnet":
+#             answer = call_llm_api(system_message, user_query)
+#         elif llm_model=="GPT 4o":
+#             answer = call_gpt_api(system_message, user_query)
+#         elif llm_model=="Claude 3.7 Sonnet":
+#             answer = call_claude_api(system_message, user_query)
+#         elif llm_model=="Deepseek R1":
+#             answer = call_deepseek_api(system_message, user_query)
+
+#     return top_k_metadata, answer, ws_response
+
+
 def query_documents_with_page_range(selected_files, selected_page_ranges, prompt, top_k, last_messages, web_search, llm_model, draft_mode, analyse_mode):
     # print(selected_files)
     # print(selected_page_ranges)
@@ -1482,6 +1657,44 @@ def query_documents_with_page_range(selected_files, selected_page_ranges, prompt
                     # with cols[idx]:
         top_k_metadata = summaries
 
+    user_query = f"""
+
+    # User Query:
+    <<<{prompt}>>>
+
+    # The top K most relevant contexts fetched from the documents are as follows:
+    {json.dumps(top_k_metadata, indent=4)}
+
+    # The last few messages of the conversation to help you maintain continuity and relevance:
+    {json.dumps(last_messages)}
+    """
+
+    ws_response = ""
+    wsp = ""
+
+    if web_search or analyse_mode or draft_mode:
+        ws_query = prompt_op["web_search_prompt"]
+        # Call the LLM API to get the answer
+        # To install, run: pip install tavily-python
+
+
+        client = TavilyClient(api_key=TAVILY_API)
+
+        ws_response = client.search(
+            query=ws_query,
+            search_depth="advanced",
+            include_raw_content=True
+        )
+
+        print(ws_response)
+
+        wsp = f"""
+        # Feel free to use the Web Search Results for Additional Context as well:
+        Please ensure your output is concise, well-organized, and each resource hyperlink is clickable. Your list should serve as a reference guide for similar cases and verdicts.
+
+        {json.dumps(ws_response)}
+        """
+    
     if draft_mode:
         # Construct a structured system message with clear sections.
         sys_msg = (
@@ -1509,7 +1722,7 @@ def query_documents_with_page_range(selected_files, selected_page_ranges, prompt
             "Each topic should appear on its own line, starting with a dash (-)."
             "Adhere to the conversation and context to understand what formatting and style you should follow and what content you should present."
         )
-        topics_response = call_llm_api(sys_msg, bullet_prompt)
+        topics_response = call_llm_api(sys_msg, bullet_prompt+wsp)
         topics = [line.lstrip(" -").strip() for line in topics_response.split("\n") if line.strip()]
         total_topics = len(topics)
 
@@ -1525,68 +1738,23 @@ def query_documents_with_page_range(selected_files, selected_page_ranges, prompt
                 "3. Make sure not to repeat information already included in previous sections.\n"
                 "4. Adhere to the conversation and context to understand what formatting and style you should follow and what content you should present."
             )
-            detailed_response = call_llm_api(sys_msg, elaboration_prompt)
+            detailed_response = call_llm_api(sys_msg, elaboration_prompt+wsp)
             final_draft += f"\n\n# {topic}:\n{detailed_response}"
             st.info(f"Drafting for topic {index}/{total_topics} ({topic}) completed.")
 
         return [], final_draft, ""
-
-
-    user_query = f"""
-
-    # User Query:
-    <<<{prompt}>>>
-
-    # The top K most relevant contexts fetched from the documents are as follows:
-    {json.dumps(top_k_metadata, indent=4)}
-
-    # The last few messages of the conversation to help you maintain continuity and relevance:
-    {json.dumps(last_messages)}
-    """
-
-    ws_response = ""
-
-    if web_search or analyse_mode:
-        ws_query = prompt_op["web_search_prompt"]
-        # Call the LLM API to get the answer
-        # To install, run: pip install tavily-python
-
-
-        client = TavilyClient(api_key=TAVILY_API)
-
-        ws_response = client.search(
-            query=ws_query,
-            search_depth="advanced",
-            include_raw_content=True
-        )
-
-        print(ws_response)
-
-        wsp = f"""
-        # Feel free to use the Web Search Results for Additional Context as well:
-        Please ensure your output is concise, well-organized, and each resource hyperlink is clickable. Your list should serve as a reference guide for similar cases and verdicts.
-
-        {json.dumps(ws_response)}
-        """
-        if llm_model=="Claude 3.5 Sonnet":
-            answer = call_llm_api(system_message, user_query+wsp)
-        elif llm_model=="GPT 4o":
-            answer = call_gpt_api(system_message, user_query+wsp)
-        elif llm_model=="Claude 3.7 Sonnet":
-            answer = call_claude_api(system_message, user_query+wsp)
-        elif llm_model=="Deepseek R1":
-            answer = call_deepseek_api(system_message, user_query+wsp)
-    else:
-        if llm_model=="Claude 3.5 Sonnet":
-            answer = call_llm_api(system_message, user_query)
-        elif llm_model=="GPT 4o":
-            answer = call_gpt_api(system_message, user_query)
-        elif llm_model=="Claude 3.7 Sonnet":
-            answer = call_claude_api(system_message, user_query)
-        elif llm_model=="Deepseek R1":
-            answer = call_deepseek_api(system_message, user_query)
+    
+    if llm_model=="Claude 3.5 Sonnet":
+        answer = call_llm_api(system_message, user_query+wsp)
+    elif llm_model=="GPT 4o":
+        answer = call_gpt_api(system_message, user_query+wsp)
+    elif llm_model=="Claude 3.7 Sonnet":
+        answer = call_claude_api(system_message, user_query+wsp)
+    elif llm_model=="Deepseek R1":
+        answer = call_deepseek_api(system_message, user_query+wsp)
 
     return top_k_metadata, answer, ws_response
+
 
 def final_format(top_k_metadata, answer, ws_response):
     sys_msg = """
