@@ -2366,6 +2366,14 @@ def main():
         st.session_state.selected_page_ranges = {}
     if 'file_summaries' not in st.session_state:
         st.session_state.file_summaries = {}
+    if "rename_mode" not in st.session_state:
+        st.session_state["rename_mode"] = None
+    if "share_chat_mode" not in st.session_state:
+        st.session_state["share_chat_mode"] = False
+    if "share_chat_conv" not in st.session_state:
+        st.session_state["share_chat_conv"] = None
+    if "share_chat_conv_id" not in st.session_state:
+        st.session_state["share_chat_conv_id"] = None
     
     current_user = st.session_state["username"]
     load_index_and_metadata()
@@ -2540,137 +2548,99 @@ def main():
             with st.expander("Click to view"):
                 st.write(faq)
 
-        # Load previous conversations in sidebar.
         st.sidebar.header("Previous Conversations")
         user_conversations = st.session_state.chat_history.get(current_user, [])
-        seen_labels = {}
         unique_conversations = []
+        seen_labels = {}
         for conv in user_conversations:
-            conv_label = conv.get('messages', [])[0]["content"]
+            conv_label = conv.get("label") or conv.get('messages', [{}])[0].get("content", "")[:50]
             if conv_label not in seen_labels:
                 seen_labels[conv_label] = conv
                 unique_conversations.append(conv)
-        unique_conversations.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
+        unique_conversations.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
 
-        if st.sidebar.toggle("Rename Conversation"):
-            for idx, conv in enumerate(unique_conversations):
-                # Use the custom label if available; otherwise, use a preview of the first message.
-                default_label = conv.get("label") or conv.get('messages', [{}])[0].get("content", "")[:50]
-                
-                # Create two columns: one for selecting the conversation, one for renaming it.
-                col1, col2 = st.sidebar.columns([2, 1])
-                
-                # Column 1: Conversation selection button.
-                # Use a key that embeds the current label so it updates when renamed.
-                button_key = f"conv_{idx}_{default_label}"
-                if col1.button(default_label, key=button_key):
-                    st.session_state.current_conversation = conv
-                    st.session_state.messages = conv.get('messages', [])
-                    st.session_state.selected_files = conv.get('files', [])
-                    st.session_state.selected_page_ranges = conv.get('page_ranges', {})
-                    # Use a new key for the multiselect so that previous selections are overridden.
-                    new_key = f"selected_files_{conv.get('timestamp', idx)}"
-                    st.session_state.selected_files = st.multiselect(
-                        "Select files to include in the query:",
-                        options=available_files,
-                        default=st.session_state.selected_files,
-                        key=new_key
-                    )
-                    for file, (start, end) in st.session_state.selected_page_ranges.items():
-                        st.number_input(f"Start page for {file}", value=start, key=f"restore_start_{file}")
-                        st.number_input(f"End page for {file}", value=end, key=f"restore_end_{file}")
-                
-                # Column 2: Renaming interface.
-                new_label = col2.text_input("Rename", value=default_label, key=f"rename_{idx}")
-                if col2.button("Save Name", key=f"save_{idx}"):
-                    # Update the conversation object with the new label.
+        for conv in unique_conversations:
+            # Use the conversation's timestamp as a unique identifier.
+            conv_id = conv.get("timestamp")
+            default_label = conv.get("label") or conv.get('messages', [{}])[0].get("content", "")[:50]
+            
+            # Check if this conversation is in rename mode.
+            if st.session_state.get("rename_mode") == conv_id:
+                new_label = st.sidebar.text_input("Rename Conversation", value=default_label, key=f"rename_input_{conv_id}")
+                if st.sidebar.button("Save", key=f"save_rename_{conv_id}"):
                     conv["label"] = new_label
+                    # Update the conversation in the chat history for the current user.
                     user = st.session_state.username
-                    # Update the corresponding conversation in the user's chat history.
                     if user in st.session_state.chat_history:
                         for stored_conv in st.session_state.chat_history[user]:
-                            if stored_conv.get("timestamp") == conv.get("timestamp"):
+                            if stored_conv.get("timestamp") == conv_id:
                                 stored_conv["label"] = new_label
                                 break
                     save_chat_history(st.session_state.chat_history)
+                    st.session_state["rename_mode"] = None  # Exit rename mode.
                     st.sidebar.success("Conversation renamed!")
-                    # Force a full rerun so updated labels and keys are used.
-                    st.experimental_rerun()
-        else:
-
-
-            for idx, conv in enumerate(unique_conversations):
-                # The first line of the conversation becomes the label if no 'label' set
-                conv_label = conv.get("label") or conv.get('messages', [{}])[0].get("content", "")[:50]
-                
-                # Use two columns in the sidebar
-                col1, col2 = st.sidebar.columns([0.9, 0.1], gap="small")
-
-                # "Load" button in the first column
-                if col1.button(conv_label, key=f"conv_load_{idx}"):
+                    st.rerun()
+            else:
+                col1, col2, col3, col4 = st.sidebar.columns([0.5, 0.2, 0.2, 0.1])
+                if col1.button(default_label, key=f"load_{conv_id}"):
                     st.session_state.current_conversation = conv
                     st.session_state.messages = conv.get('messages', [])
                     st.session_state.selected_files = conv.get('files', [])
                     st.session_state.selected_page_ranges = conv.get('page_ranges', {})
-                    # If you want to reorder the chat list each time it's clicked, do it here:
-                    user = st.session_state.username
-                    if user in st.session_state.chat_history:
-                        # Update last-used timestamp on the conversation itself (see step 2 below)
-                        ist_timezone = pytz.timezone("Asia/Kolkata")
-                        conv["timestamp"] = datetime.now(ist_timezone).strftime("%Y-%m-%d %H:%M:%S")
-                        # Sort by new timestamp so it goes to the top
-                        st.session_state.chat_history[user] = sorted(
-                            st.session_state.chat_history[user],
-                            key=lambda x: x.get("timestamp", ""),
-                            reverse=True
-                        )
-                        save_chat_history(st.session_state.chat_history)
                     st.rerun()
-
-                # "Delete" button in the second column
-                if col2.button("X", key=f"conv_delete_{idx}"):
-                    # user = st.session_state.username
-                    # if user in st.session_state.chat_history:
-                    #     st.session_state.chat_history[user].remove(conv)
-                    #     save_chat_history(st.session_state.chat_history)
-                    #     st.rerun()
-                    # Instead of deleting right away, mark this conversation for deletion.
+                if col2.button("✏️", key=f"rename_button_{conv_id}"):
+                    st.session_state["rename_mode"] = conv_id
+                    st.rerun()
+                if col3.button("🗑️", key=f"delete_{conv_id}"):
                     st.session_state["confirm_delete_conv"] = conv
                     st.rerun()
-            
-            # --- Outside the for-loop that lists the conversations ---
-            if "confirm_delete_conv" in st.session_state:
-                st.warning("Are you sure you want to delete this conversation? This action cannot be undone.")
+                if col4.button("📤", key=f"share_chat_{conv_id}"):
+                    st.session_state["share_chat_conv"] = conv
+                    st.session_state["share_chat_conv_id"] = conv_id
+                    st.session_state["share_chat_mode"] = True
+                    st.rerun()
 
-                ccol1, ccol2 = st.columns(2)
-                with ccol1:
-                    if st.button("Confirm Delete"):
-                        user = st.session_state.username
-                        # Proceed with the actual deletion
-                        if user in st.session_state.chat_history:
-                            try:
-                                st.session_state.chat_history[user].remove(st.session_state["confirm_delete_conv"])
-                            except ValueError:
-                                pass  # Already removed or not found
+        # Insert the share-chat snippet below the conversation list:
+        if st.session_state.get("share_chat_mode"):
+            st.sidebar.header("Share Chat Conversation")
+            share_chat_with = st.sidebar.multiselect("Select user(s) to share with", options=available_usernames)
+            if st.sidebar.button("Confirm Share Chat"):
+                chat_to_share = st.session_state["share_chat_conv"]
+                # For each target user, append a deep copy of the conversation
+                for user in share_chat_with:
+                    if user in st.session_state.chat_history:
+                        st.session_state.chat_history[user].append(copy.deepcopy(chat_to_share))
+                    else:
+                        st.session_state.chat_history[user] = [copy.deepcopy(chat_to_share)]
+                save_chat_history(st.session_state.chat_history)
+                st.sidebar.success("Chat conversation shared successfully!")
+                # Reset share mode variables
+                st.session_state["share_chat_mode"] = False
+                st.session_state.pop("share_chat_conv", None)
+                st.session_state.pop("share_chat_conv_id", None)
+                st.rerun()
 
-                            save_chat_history(st.session_state.chat_history)
-                        
-                        # Clear the conversation from session state
-                        del st.session_state["confirm_delete_conv"]
-                        st.success("Conversation deleted!")
-                        st.rerun()
-
-                with ccol2:
-                    if st.button("Cancel"):
-                        # Simply clear the pending delete conversation
-                        del st.session_state["confirm_delete_conv"]
-                        st.info("Deletion canceled.")
-                        st.rerun()
-
-
-        # --- Ensure required session state keys exist ---
-        if "share_message" not in st.session_state:
-            st.session_state.share_message = ""
+        # If a conversation is marked for deletion, confirm deletion.
+        if "confirm_delete_conv" in st.session_state:
+            st.sidebar.warning("Are you sure you want to delete this conversation? This action cannot be undone.")
+            ccol1, ccol2 = st.sidebar.columns(2)
+            with ccol1:
+                if st.button("Confirm Delete"):
+                    user = st.session_state.username
+                    if user in st.session_state.chat_history:
+                        try:
+                            st.session_state.chat_history[user].remove(st.session_state["confirm_delete_conv"])
+                        except ValueError:
+                            pass  # Conversation already removed.
+                        save_chat_history(st.session_state.chat_history)
+                    del st.session_state["confirm_delete_conv"]
+                    st.sidebar.success("Conversation deleted!")
+                    st.rerun()
+            with ccol2:
+                if st.button("Cancel"):
+                    del st.session_state["confirm_delete_conv"]
+                    st.sidebar.info("Deletion canceled.")
+                    st.rerun()
 
         # --- Display chat messages with share options ---
         for idx, message in enumerate(st.session_state.messages):
