@@ -743,6 +743,7 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from openai import AzureOpenAI, OpenAI
+import copy
 
 if "Authenticator" not in st.session_state:
     st.session_state["Authenticator"] = None
