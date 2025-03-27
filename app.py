@@ -744,6 +744,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from openai import AzureOpenAI, OpenAI
 import copy
+import uuid
 
 if "Authenticator" not in st.session_state:
     st.session_state["Authenticator"] = None
@@ -2375,6 +2376,8 @@ def main():
         st.session_state["share_chat_conv"] = None
     if "share_chat_conv_id" not in st.session_state:
         st.session_state["share_chat_conv_id"] = None
+
+    available_usernames = list(USERS.keys())
     
     current_user = st.session_state["username"]
     load_index_and_metadata()
@@ -2403,7 +2406,7 @@ def main():
                     st.success(f"File '{uploaded_file.name}' has been successfully uploaded and added to the index.")
 
     elif option == "File Manager":
-        available_usernames = list(USERS.keys())
+        # available_usernames = list(USERS.keys())
         st.header("My Uploaded Files")
         # Filter files for the current user (see user isolation in step 2)
         current_user = st.session_state.get("username", "unknown")
@@ -2445,6 +2448,7 @@ def main():
 
         # "New Chat" button resets conversation and state.
         if st.sidebar.button("New Chat"):
+            st.session_state.current_conversation_id = None  # Clear any old conversation ID
             st.session_state.current_conversation = None
             st.session_state.messages = []
             st.session_state.sources = []
@@ -2741,80 +2745,163 @@ def main():
         # --- New User Input using text_area ---
         user_message = user_input()
         if user_message:
-            # Append user message and then process query.
             ist_timezone = pytz.timezone("Asia/Kolkata")
             timestamp_now = datetime.now(ist_timezone).strftime("%Y-%m-%d %H:%M:%S")
+
+            # 1) Append the user's message to st.session_state.messages
             st.session_state.messages.append({
                 "role": "user",
                 "content": user_message,
                 "time": timestamp_now
             })
-            # Display the user message.
+
+            # Display the user message in chat
             with st.chat_message("user"):
                 st.markdown(user_message)
 
-            # Prepare the last few messages for context.
-            last_messages = st.session_state.messages[-5:] if len(st.session_state.messages) >= 5 else st.session_state.messages
+            # [Run your retrieval code here: query_documents_with_page_range, etc.]
 
-            with st.spinner("Searching documents..."):
-                top_k_metadata, answer, ws_response = query_documents_with_page_range(
-                    st.session_state.selected_files, 
-                    st.session_state.selected_page_ranges, 
-                    user_message,
-                    top_k,
-                    last_messages,
-                    web_search,
-                    llm_model,
-                    draft_mode, 
-                    analyse_mode
-                )
-                st.session_state.sources.append({
-                    "top_k_metadata": top_k_metadata,
-                    "answer": answer,
-                    "websearch_metadata": ws_response
-                })
+            # After you get the LLM's answer, you append the "assistant" message:
+            assistant_answer = answer  # from your retrieval
+            current_time = datetime.now(ist_timezone).strftime("%Y-%m-%d %H:%M:%S")
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": assistant_answer,
+                "time": current_time,
+                "sources": [top_k_metadata, ws_response]
+            })
 
-                ist_timezone = pytz.timezone("Asia/Kolkata")
-                current_time = datetime.now(ist_timezone).strftime("%Y-%m-%d %H:%M:%S")
+            # Show the assistant response in the UI
+            with st.chat_message("assistant"):
+                st.markdown(assistant_answer)
 
-                # Append assistant response.
-                st.session_state.messages.append({
-                    "role": "assistant",
-                    "content": answer,
-                    "time": current_time,
-                    "sources": [top_k_metadata, ws_response]
-                })
+            user = st.session_state.username
+            if user not in st.session_state.chat_history:
+                st.session_state.chat_history[user] = []
 
-                with st.chat_message("assistant"):
-                    st.markdown(answer)
+            # 2) Now decide if we update an existing conversation or create a new one
+            current_conversation_id = st.session_state.get("current_conversation_id", None)
 
-                ist_timezone = pytz.timezone("Asia/Kolkata")
-                current_time = datetime.now(ist_timezone).strftime("%Y-%m-%d %H:%M:%S")
+            if current_conversation_id:
+                # -- UPDATE existing conversation --
+                # Find that conversation in the user's list
+                for conv in st.session_state.chat_history[user]:
+                    if conv.get("conversation_id") == current_conversation_id:
+                        # Overwrite the conversation's messages with the new messages
+                        conv["messages"] = st.session_state.messages
+                        # Optionally update timestamp so it sorts to the top
+                        conv["timestamp"] = current_time
+                        # Keep track of the current files / page ranges
+                        conv["files"] = st.session_state.selected_files
+                        conv["page_ranges"] = st.session_state.selected_page_ranges
+                        break
+            else:
+                # -- CREATE a new conversation --
+                new_conversation_id = str(uuid.uuid4())
+                st.session_state.current_conversation_id = new_conversation_id
 
                 new_conversation = {
+                    "conversation_id": new_conversation_id,
+                    "label": user_message[:50],  # or any default label
                     "timestamp": current_time,
                     "messages": st.session_state.messages,
                     "files": st.session_state.selected_files,
                     "page_ranges": st.session_state.selected_page_ranges
                 }
 
-                user = st.session_state.username
-                if user not in st.session_state.chat_history:
-                    st.session_state.chat_history[user] = []
-
-                # If this conversation is brand new, just append
-                # If you want to handle "merging" with existing, do it here.
                 st.session_state.chat_history[user].append(new_conversation)
 
-                # Sort so the newest conversation is on top
-                st.session_state.chat_history[user] = sorted(
-                    st.session_state.chat_history[user],
-                    key=lambda x: x.get("timestamp", ""),
-                    reverse=True
-                )
+            # 3) Sort the user’s chat list so newest is on top
+            st.session_state.chat_history[user] = sorted(
+                st.session_state.chat_history[user],
+                key=lambda x: x.get("timestamp", ""),
+                reverse=True
+            )
 
-                save_chat_history(st.session_state.chat_history)
-                st.rerun()
+            # 4) Save updated chat_history
+            save_chat_history(st.session_state.chat_history)
+
+            # 5) Rerun if you want the UI updated
+            st.rerun()
+
+            # # Append user message and then process query.
+            # ist_timezone = pytz.timezone("Asia/Kolkata")
+            # timestamp_now = datetime.now(ist_timezone).strftime("%Y-%m-%d %H:%M:%S")
+            # st.session_state.messages.append({
+            #     "role": "user",
+            #     "content": user_message,
+            #     "time": timestamp_now
+            # })
+            # # Display the user message.
+            # with st.chat_message("user"):
+            #     st.markdown(user_message)
+
+            # # Prepare the last few messages for context.
+            # last_messages = st.session_state.messages[-5:] if len(st.session_state.messages) >= 5 else st.session_state.messages
+
+            # with st.spinner("Searching documents..."):
+            #     top_k_metadata, answer, ws_response = query_documents_with_page_range(
+            #         st.session_state.selected_files, 
+            #         st.session_state.selected_page_ranges, 
+            #         user_message,
+            #         top_k,
+            #         last_messages,
+            #         web_search,
+            #         llm_model,
+            #         draft_mode, 
+            #         analyse_mode
+            #     )
+            #     st.session_state.sources.append({
+            #         "top_k_metadata": top_k_metadata,
+            #         "answer": answer,
+            #         "websearch_metadata": ws_response
+            #     })
+
+            #     ist_timezone = pytz.timezone("Asia/Kolkata")
+            #     current_time = datetime.now(ist_timezone).strftime("%Y-%m-%d %H:%M:%S")
+
+            #     # Append assistant response.
+            #     st.session_state.messages.append({
+            #         "role": "assistant",
+            #         "content": answer,
+            #         "time": current_time,
+            #         "sources": [top_k_metadata, ws_response]
+            #     })
+
+            #     with st.chat_message("assistant"):
+            #         st.markdown(answer)
+
+            #     ist_timezone = pytz.timezone("Asia/Kolkata")
+            #     current_time = datetime.now(ist_timezone).strftime("%Y-%m-%d %H:%M:%S")
+
+            #     new_conversation_id = str(uuid.uuid4())
+            #     new_conversation = {
+            #         "conversation_id": new_conversation_id,
+            #         "label": user_message[:50],
+            #         "timestamp": current_time,
+            #         "messages": st.session_state.messages,
+            #         "files": st.session_state.selected_files,
+            #         "page_ranges": st.session_state.selected_page_ranges
+            #     }
+
+            #     user = st.session_state.username
+            #     if user not in st.session_state.chat_history:
+            #         st.session_state.chat_history[user] = []
+
+            #     # If this conversation is brand new, just append
+            #     # If you want to handle "merging" with existing, do it here.
+            #     st.session_state.current_conversation_id = new_conversation_id
+            #     st.session_state.chat_history[user].append(new_conversation)
+
+            #     # Sort so the newest conversation is on top
+            #     st.session_state.chat_history[user] = sorted(
+            #         st.session_state.chat_history[user],
+            #         key=lambda x: x.get("timestamp", ""),
+            #         reverse=True
+            #     )
+
+            #     save_chat_history(st.session_state.chat_history)
+            #     st.rerun()
 
     elif option == "Query Advanced":
         st.header("Query Advanced")
