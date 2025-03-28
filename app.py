@@ -3146,11 +3146,15 @@ def main():
 
     elif option == "Usage Monitoring":
         st.header("Usage Monitoring")
-        
-        # Add a dropdown in the sidebar for period selection
+
+        # 1. Gather all usernames from your USERS dictionary
+        all_usernames = list(USERS.keys())
+
+        # 2. Add a dropdown in the sidebar for period selection
         period_options = ["Last 3 Days", "Last 7 Days", "Last 14 Days", "Last 1 Month", "Last 3 Months"]
-        selected_period = st.sidebar.selectbox("Select Period", period_options, index=3)  # default to Last 1 Month
-        # Map each option to the corresponding number of days
+        selected_period = st.sidebar.selectbox("Select Period", period_options, index=3)  # default: Last 1 Month
+        
+        # Map each period to the corresponding number of days
         period_days = {
             "Last 3 Days": 3,
             "Last 7 Days": 7,
@@ -3159,12 +3163,22 @@ def main():
             "Last 3 Months": 90
         }
         selected_days = period_days[selected_period]
+        
+        # Display the subheader with the chosen period
         st.subheader(f"Usage Monitoring - {selected_period}")
 
-        # Load the chat history (this is a dict with keys as usernames)
+        # 3. Add a multi-select for user filtering
+        selected_users = st.sidebar.multiselect(
+            "Select User(s) to Display",
+            options=all_usernames,
+            default=all_usernames  # By default, all are selected
+        )
+
+        # 4. Load the chat history (keys are usernames)
         chat_history = load_chat_history()
 
-        # Create a list of records: each record is { 'user': ..., 'timestamp': ... }
+        # Build a list of usage records from chat_history
+        # Each record is { 'user': ..., 'timestamp': datetime_object }
         records = []
         for user, conversations in chat_history.items():
             for conv in conversations:
@@ -3176,73 +3190,188 @@ def main():
                     except Exception as e:
                         st.warning(f"Timestamp format error for user {user}: {e}")
 
+        # 5. Check if we have any usage records at all
         if not records:
             st.info("No usage data available.")
-        else:
-            # Convert records to a Pandas DataFrame
-            df = pd.DataFrame(records)
+            return
 
-            # Filter for the selected period
-            today = datetime.today()
-            start_date = today - timedelta(days=selected_days)
-            df_period = df[df["timestamp"] >= start_date]
+        # Convert records to a DataFrame
+        df = pd.DataFrame(records)
 
-            # --- Bar Graph: Total Queries per User ---
-            user_counts = df_period.groupby("user").size().reset_index(name="queries")
-            bar_fig = px.bar(
-                user_counts, 
-                x="user", 
-                y="queries",
-                title=f"Total Queries per User ({selected_period})",
-                labels={"user": "User", "queries": "Number of Queries"}
-            )
-            st.plotly_chart(bar_fig, use_container_width=True)
+        # 6. Filter by the selected date range
+        today = datetime.today()
+        start_date = today - timedelta(days=selected_days)
+        df_period = df[df["timestamp"] >= start_date]
 
-            # --- Line Graph: Day-wise Queries per User with Moving Average ---
-            # Create a 'date' column (date only)
-            df_period["date"] = df_period["timestamp"].dt.date
+        # 7. Filter by the selected users from the multi-select
+        df_period = df_period[df_period["user"].isin(selected_users)]
 
-            # Count queries per user per day
-            daily_counts = df_period.groupby(["user", "date"]).size().reset_index(name="queries")
+        # If no data after both filters, exit
+        if df_period.empty:
+            st.info("No usage data found for the chosen date range and user(s).")
+            return
 
-            # Create a complete date range for the selected period
-            date_range = pd.date_range(start=start_date.date(), end=today.date())
-            all_users = daily_counts["user"].unique()
-            complete_data = []
+        # --- BAR CHART: Total Queries per User ---
+        user_counts = df_period.groupby("user").size().reset_index(name="queries")
+        bar_fig = px.bar(
+            user_counts,
+            x="user",
+            y="queries",
+            title=f"Total Queries per User ({selected_period})",
+            labels={"user": "User", "queries": "Number of Queries"}
+        )
+        st.plotly_chart(bar_fig, use_container_width=True)
 
-            for user in all_users:
-                user_df = daily_counts[daily_counts["user"] == user].copy()
-                user_df.set_index("date", inplace=True)
-                # Reindex to include all dates in the range, filling missing days with 0 queries
-                user_df = user_df.reindex(date_range, fill_value=0)
-                user_df = user_df.rename_axis("date").reset_index()
-                user_df["user"] = user
-                # Calculate a moving average using the selected period as window
-                user_df["moving_avg"] = user_df["queries"].rolling(window=selected_days, min_periods=1).mean()
-                complete_data.append(user_df)
+        # --- LINE CHART: Day-wise Queries per User with Moving Average ---
+        # Create a 'date' column (just the date part)
+        df_period["date"] = df_period["timestamp"].dt.date
 
-            daily_all = pd.concat(complete_data, ignore_index=True)
+        # Count queries per user per day
+        daily_counts = df_period.groupby(["user", "date"]).size().reset_index(name="queries")
 
-            # Create the line graph with one line per user
-            line_fig = px.line(
-                daily_all, 
-                x="date", 
-                y="queries", 
-                color="user",
-                title=f"Daily Queries per User ({selected_period})",
-                labels={"date": "Date", "queries": "Number of Queries"}
-            )
-            # Add moving average lines for each user
-            for user in all_users:
-                user_data = daily_all[daily_all["user"] == user]
-                line_fig.add_trace(go.Scatter(
-                    x=user_data["date"], 
+        # Create a complete date range for the selected period
+        date_range = pd.date_range(start=start_date.date(), end=today.date())
+        all_users_in_data = daily_counts["user"].unique()
+        complete_data = []
+
+        # Build a day-by-day dataset with possible missing dates filled in
+        for user in all_users_in_data:
+            user_df = daily_counts[daily_counts["user"] == user].copy()
+            user_df.set_index("date", inplace=True)
+            # Reindex to fill missing days with 0
+            user_df = user_df.reindex(date_range, fill_value=0)
+            user_df = user_df.rename_axis("date").reset_index()
+            user_df["user"] = user
+            
+            # Calculate a moving average based on 'selected_days'
+            user_df["moving_avg"] = user_df["queries"].rolling(window=selected_days, min_periods=1).mean()
+            complete_data.append(user_df)
+
+        # Combine each user's timeseries data
+        daily_all = pd.concat(complete_data, ignore_index=True)
+
+        # Create the line graph showing daily queries
+        line_fig = px.line(
+            daily_all,
+            x="date",
+            y="queries",
+            color="user",
+            title=f"Daily Queries per User ({selected_period})",
+            labels={"date": "Date", "queries": "Number of Queries"}
+        )
+
+        # Add a separate trace for the rolling average of each user
+        for user in all_users_in_data:
+            user_data = daily_all[daily_all["user"] == user]
+            line_fig.add_trace(
+                go.Scatter(
+                    x=user_data["date"],
                     y=user_data["moving_avg"],
-                    mode="lines", 
+                    mode="lines",
                     name=f"{user} - {selected_period} MA"
-                ))
+                )
+            )
 
-            st.plotly_chart(line_fig, use_container_width=True)
+        st.plotly_chart(line_fig, use_container_width=True)
+
+        # st.header("Usage Monitoring")
+        
+        # # Add a dropdown in the sidebar for period selection
+        # period_options = ["Last 3 Days", "Last 7 Days", "Last 14 Days", "Last 1 Month", "Last 3 Months"]
+        # selected_period = st.sidebar.selectbox("Select Period", period_options, index=3)  # default to Last 1 Month
+        # # Map each option to the corresponding number of days
+        # period_days = {
+        #     "Last 3 Days": 3,
+        #     "Last 7 Days": 7,
+        #     "Last 14 Days": 14,
+        #     "Last 1 Month": 30,
+        #     "Last 3 Months": 90
+        # }
+        # selected_days = period_days[selected_period]
+        # st.subheader(f"Usage Monitoring - {selected_period}")
+
+        # # Load the chat history (this is a dict with keys as usernames)
+        # chat_history = load_chat_history()
+
+        # # Create a list of records: each record is { 'user': ..., 'timestamp': ... }
+        # records = []
+        # for user, conversations in chat_history.items():
+        #     for conv in conversations:
+        #         timestamp_str = conv.get("timestamp")
+        #         if timestamp_str:
+        #             try:
+        #                 ts = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
+        #                 records.append({"user": user, "timestamp": ts})
+        #             except Exception as e:
+        #                 st.warning(f"Timestamp format error for user {user}: {e}")
+
+        # if not records:
+        #     st.info("No usage data available.")
+        # else:
+        #     # Convert records to a Pandas DataFrame
+        #     df = pd.DataFrame(records)
+
+        #     # Filter for the selected period
+        #     today = datetime.today()
+        #     start_date = today - timedelta(days=selected_days)
+        #     df_period = df[df["timestamp"] >= start_date]
+
+        #     # --- Bar Graph: Total Queries per User ---
+        #     user_counts = df_period.groupby("user").size().reset_index(name="queries")
+        #     bar_fig = px.bar(
+        #         user_counts, 
+        #         x="user", 
+        #         y="queries",
+        #         title=f"Total Queries per User ({selected_period})",
+        #         labels={"user": "User", "queries": "Number of Queries"}
+        #     )
+        #     st.plotly_chart(bar_fig, use_container_width=True)
+
+        #     # --- Line Graph: Day-wise Queries per User with Moving Average ---
+        #     # Create a 'date' column (date only)
+        #     df_period["date"] = df_period["timestamp"].dt.date
+
+        #     # Count queries per user per day
+        #     daily_counts = df_period.groupby(["user", "date"]).size().reset_index(name="queries")
+
+        #     # Create a complete date range for the selected period
+        #     date_range = pd.date_range(start=start_date.date(), end=today.date())
+        #     all_users = daily_counts["user"].unique()
+        #     complete_data = []
+
+        #     for user in all_users:
+        #         user_df = daily_counts[daily_counts["user"] == user].copy()
+        #         user_df.set_index("date", inplace=True)
+        #         # Reindex to include all dates in the range, filling missing days with 0 queries
+        #         user_df = user_df.reindex(date_range, fill_value=0)
+        #         user_df = user_df.rename_axis("date").reset_index()
+        #         user_df["user"] = user
+        #         # Calculate a moving average using the selected period as window
+        #         user_df["moving_avg"] = user_df["queries"].rolling(window=selected_days, min_periods=1).mean()
+        #         complete_data.append(user_df)
+
+        #     daily_all = pd.concat(complete_data, ignore_index=True)
+
+        #     # Create the line graph with one line per user
+        #     line_fig = px.line(
+        #         daily_all, 
+        #         x="date", 
+        #         y="queries", 
+        #         color="user",
+        #         title=f"Daily Queries per User ({selected_period})",
+        #         labels={"date": "Date", "queries": "Number of Queries"}
+        #     )
+        #     # Add moving average lines for each user
+        #     for user in all_users:
+        #         user_data = daily_all[daily_all["user"] == user]
+        #         line_fig.add_trace(go.Scatter(
+        #             x=user_data["date"], 
+        #             y=user_data["moving_avg"],
+        #             mode="lines", 
+        #             name=f"{user} - {selected_period} MA"
+        #         ))
+
+        #     st.plotly_chart(line_fig, use_container_width=True)
 
     else:
         st.warning("No files available in the index. Please upload Documents to populate the index.")
