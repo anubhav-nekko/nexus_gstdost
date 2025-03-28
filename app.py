@@ -1271,6 +1271,18 @@ def delete_file(file_name):
     # Optionally, update your index if needed and re-save metadata:
     save_index_and_metadata()
 
+def user_has_file_access(username, file_name):
+    """
+    Checks whether the given username already has access to a file with file_name.
+    This means the file is present in metadata_store with the same filename 
+    AND the user is either the owner or is in that file's shared_with list.
+    """
+    for record in metadata_store:
+        if record["filename"] == file_name:
+            if record["owner"] == username or username in record.get("shared_with", []):
+                return True
+    return False
+
 def add_pdf_to_index(pdf_file):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_pdf:
         temp_pdf.write(pdf_file.read())
@@ -2399,11 +2411,19 @@ def main():
         if uploaded_files:
             for uploaded_file in uploaded_files:
                 st.write(f"Processing {uploaded_file.name}...")
-                if file_exists_in_blob(uploaded_file.name):
-                    st.warning(f"File '{uploaded_file.name}' already exists in Storage. Skipping upload.")
+                current_user = st.session_state.get("username", "unknown")
+                # if file_exists_in_blob(uploaded_file.name):
+                #     st.warning(f"File '{uploaded_file.name}' already exists in Storage. Skipping upload.")
+                # else:
+                #     add_file_to_index(uploaded_file)
+                #     st.success(f"File '{uploaded_file.name}' has been successfully uploaded and added to the index.")
+                # Check if current user already has access
+                if user_has_file_access(current_user, uploaded_file.name):
+                    st.warning(f"File '{uploaded_file.name}' is already in your library (owned or shared). Skipping upload.")
                 else:
+                    # Proceed with normal upload & indexing
                     add_file_to_index(uploaded_file)
-                    st.success(f"File '{uploaded_file.name}' has been successfully uploaded and added to the index.")
+                    st.success(f"File '{uploaded_file.name}' has been successfully uploaded and added to your library.")
 
     elif option == "File Manager":
         # available_usernames = list(USERS.keys())
