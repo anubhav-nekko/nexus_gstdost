@@ -2781,6 +2781,30 @@ def main():
 
             # [Run your retrieval code here: query_documents_with_page_range, etc.]
 
+            # Prepare the last few messages for context.
+            last_messages = st.session_state.messages[-5:] if len(st.session_state.messages) >= 5 else st.session_state.messages
+
+            with st.spinner("Searching documents..."):
+                top_k_metadata, answer, ws_response = query_documents_with_page_range(
+                    st.session_state.selected_files, 
+                    st.session_state.selected_page_ranges, 
+                    user_message,
+                    top_k,
+                    last_messages,
+                    web_search,
+                    llm_model,
+                    draft_mode, 
+                    analyse_mode
+                )
+                st.session_state.sources.append({
+                    "top_k_metadata": top_k_metadata,
+                    "answer": answer,
+                    "websearch_metadata": ws_response
+                })
+
+
+            ist_timezone = pytz.timezone("Asia/Kolkata")
+
             # After you get the LLM's answer, you append the "assistant" message:
             assistant_answer = answer  # from your retrieval
             current_time = datetime.now(ist_timezone).strftime("%Y-%m-%d %H:%M:%S")
