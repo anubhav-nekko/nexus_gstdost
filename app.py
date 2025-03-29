@@ -712,37 +712,37 @@ Remember, you are not only a tool of precision and insight, but also a beacon of
 import os
 import json
 import re
-import requests
+import requests # type: ignore
 import tempfile
 import pickle
-import fitz  # PyMuPDF
-import faiss
-import streamlit as st
-from sentence_transformers import SentenceTransformer
-import numpy as np
+import fitz  # PyMuPDF # type: ignore
+import faiss # type: ignore
+import streamlit as st # type: ignore
+from sentence_transformers import SentenceTransformer # type: ignore
+import numpy as np # type: ignore
 from datetime import datetime, timedelta
-import pytz
-import time
-import boto3
-from tavily import TavilyClient
+import pytz # type: ignore
+import time 
+import boto3 # type: ignore
+from tavily import TavilyClient # type: ignore
 # import html
-from streamlit_cookies_manager import EncryptedCookieManager
-import streamlit_authenticator as stauth
-import matplotlib.pyplot as plt
-import plotly.express as px
-import plotly.graph_objects as go
-from docx import Document
-from pptx import Presentation
-import pandas as pd
-from azure.storage.blob import BlobServiceClient
+from streamlit_cookies_manager import EncryptedCookieManager # type: ignore
+import streamlit_authenticator as stauth # type: ignore
+import matplotlib.pyplot as plt # type: ignore
+import plotly.express as px # type: ignore
+import plotly.graph_objects as go # type: ignore
+from docx import Document # type: ignore
+from pptx import Presentation # type: ignore
+import pandas as pd # type: ignore
+from azure.storage.blob import BlobServiceClient # type: ignore
 import io
 from io import BytesIO
-from PIL import Image
-import cv2
+from PIL import Image # type: ignore
+import cv2 # type: ignore
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from openai import AzureOpenAI, OpenAI
+from openai import AzureOpenAI, OpenAI # type: ignore
 import copy
 import uuid
 
