@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Phaser Galaga Style Game</title>
+  <!-- Include Phaser 3 from a CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
+  <style>
+    body { margin: 0; background: #000; }
+    canvas { display: block; margin: auto; }
+  </style>
+</head>
+<body>
+<script>
+// Game configuration
+var config = {
+  type: Phaser.AUTO,
+  width: 800,
+  height: 600,
+  physics: {
+    default: 'arcade',
+    arcade: { debug: false }
+  },
+  scene: { preload: preload, create: create, update: update }
+};
+
+var player;
+var cursors;
+var bullets;
+var lastFired = 0;
+var enemies;
+var enemyTimer = 0;
+var score = 0;
+var scoreText;
+
+var game = new Phaser.Game(config);
+
+function preload() {
+  // Load images (you can replace these URLs with your own assets)
+  this.load.image('player', 'https://labs.phaser.io/assets/sprites/ship.png');
+  this.load.image('bullet', 'https://labs.phaser.io/assets/sprites/bullet.png');
+  this.load.image('enemy', 'https://labs.phaser.io/assets/sprites/enemy-black.png');
+}
+
+function create() {
+  // Create player at the bottom center of the screen
+  player = this.physics.add.sprite(config.width / 2, config.height - 50, 'player');
+  player.setCollideWorldBounds(true);
+
+  // Create a group for bullets
+  bullets = this.physics.add.group({
+    classType: Phaser.Physics.Arcade.Image,
+    maxSize: 30,
+    runChildUpdate: true
+  });
+
+  // Create a group for enemies
+  enemies = this.physics.add.group();
+
+  // Set up keyboard input
+  cursors = this.input.keyboard.createCursorKeys();
+
+  // Display score
+  scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '20px', fill: '#ffffff' });
+
+  // Set collision between bullets and enemies
+  this.physics.add.overlap(bullets, enemies, hitEnemy, null, this);
+}
+
+function update(time, delta) {
+  // Move player left/right with arrow keys
+  if (cursors.left.isDown) {
+    player.setVelocityX(-300);
+  } else if (cursors.right.isDown) {
+    player.setVelocityX(300);
+  } else {
+    player.setVelocityX(0);
+  }
+
+  // Fire bullet when space is pressed (with a cooldown)
+  if (cursors.space.isDown && time > lastFired) {
+    var bullet = bullets.get();
+    if (bullet) {
+      bullet.enableBody(true, player.x, player.y - 20, true, true);
+      bullet.setVelocityY(-400);
+      lastFired = time + 250; // Adjust fire rate (milliseconds)
+    }
+  }
+
+  // Spawn enemies every 2 seconds
+  if (time > enemyTimer) {
+    spawnEnemy(this);
+    enemyTimer = time + 2000;
+  }
+
+  // Move enemies downward and remove them if they exit the screen
+  enemies.getChildren().forEach(function(enemy) {
+    enemy.y += 1; // enemy descent speed
+    if (enemy.y > config.height) {
+      enemy.destroy();
+    }
+  });
+}
+
+// Spawn an enemy at a random x-position along the top
+function spawnEnemy(scene) {
+  var x = Phaser.Math.Between(50, config.width - 50);
+  var enemy = enemies.create(x, 0, 'enemy');
+  enemy.setVelocityY(50); // enemy speed (can adjust as needed)
+}
+
+// When a bullet hits an enemy
+function hitEnemy(bullet, enemy) {
+  bullet.destroy();
+  enemy.destroy();
+  score += 10;
+  scoreText.setText('Score: ' + score);
+}
+</script>
+</body>
+</html>

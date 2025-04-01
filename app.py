@@ -844,6 +844,16 @@ s3_client = boto3.client('s3', region_name=REGION,
                          aws_access_key_id=aws_access_key_id,
                          aws_secret_access_key=aws_secret_access_key)
 
+def get_presigned_url(file_key, expiration=3600):
+    """
+    Generate a pre-signed URL for the S3 object.
+    """
+    return s3_client.generate_presigned_url(
+        'get_object',
+        Params={'Bucket': s3_bucket_name, 'Key': file_key},
+        ExpiresIn=expiration
+    )
+
 def save_chat_history(chat_history, blob_name="chat_history.json"):
     try:
         local_file_path = "chat_history.json"
@@ -1640,7 +1650,7 @@ def query_documents_with_page_range(selected_files, selected_page_ranges, prompt
     query_embedding = generate_titan_embeddings(query).reshape(1, -1)
     if faiss_index.ntotal == 0:
         st.error("The FAISS index is empty. Please upload a PDF to populate the index.")
-        return [], "No data available to query."
+        return [], "No data available to query.", ""
 
     # Fetch all metadata for the given query
     k = faiss_index.ntotal  # Initial broad search
@@ -2784,7 +2794,22 @@ def main():
             # Prepare the last few messages for context.
             last_messages = st.session_state.messages[-5:] if len(st.session_state.messages) >= 5 else st.session_state.messages
 
+
             with st.spinner("Searching documents..."):
+                st.markdown("**While you wait, Feel free to Refer to the Original Documents or Play a Relaxing Game**")
+
+                for file_key in st.session_state.selected_file:
+                    # Generate the pre-signed URL for each file
+                    preview_url = get_presigned_url(file_key)
+                    # Create a clickable markdown link; clicking it will open the file in a new tab
+                    st.markdown(f"[**{file_key}**]({preview_url})", unsafe_allow_html=True)
+
+                st.markdown("[Play Space Galaga](http://127.0.0.1:8000/)")
+                st.markdown("[Play Snake Game](http://127.0.0.1:8001/)")
+                st.markdown("[Play Atari Breakout](http://127.0.0.1:8002/)")
+                st.markdown("[Play Endless Runner](http://127.0.0.1:8003/)")
+
+
                 top_k_metadata, answer, ws_response = query_documents_with_page_range(
                     st.session_state.selected_files, 
                     st.session_state.selected_page_ranges, 
@@ -2796,6 +2821,50 @@ def main():
                     draft_mode, 
                     analyse_mode
                 )
+
+                if "error" in answer.lower():
+                    if "bedrock" in answer.lower() or "tavily" in answer.lower():
+                            summary_prompt_dict = {
+                                "system_message": "You are an intelligent query refiner. Your job is to take a user's original query (which may contain poor grammar or informal language) along with the last 5 messages of the conversation and Summarise it into a Detailed Concise Message which explains what the user is asking for. Ensure you do not miss any details",
+                                "user_query": f"User Query: {user_message}\n\nLast 5 Messages: {last_messages}"
+                            }
+
+                            prompt = call_gpt_api(summary_prompt_dict["system_message"], summary_prompt_dict["user_query"])
+
+                            if "error" in prompt and "bedrock" in prompt:
+                                last_messages = st.session_state.messages[-2:] if len(st.session_state.messages) >= 2 else st.session_state.messages
+                                summary_prompt_dict = {
+                                    "system_message": "You are an intelligent query refiner. Your job is to take a user's original query (which may contain poor grammar or informal language) along with the last 5 messages of the conversation and Summarise it into a Detailed Concise Message which explains what the user is asking for. Ensure you do not miss any details",
+                                    "user_query": f"User Query: {user_message}\n\nLast 5 Messages: {last_messages}"
+                                }
+
+                                prompt = call_gpt_api(summary_prompt_dict["system_message"], summary_prompt_dict["user_query"])
+
+                            top_k_metadata, answer, ws_response = query_documents_with_page_range(
+                                st.session_state.selected_files, 
+                                st.session_state.selected_page_ranges, 
+                                prompt,
+                                top_k,
+                                [],
+                                web_search,
+                                llm_model,
+                                draft_mode, 
+                                analyse_mode
+                            )
+
+                            if "error" in answer and "bedrock" in answer:
+                                top_k_metadata, answer, ws_response = query_documents_with_page_range(
+                                    st.session_state.selected_files, 
+                                    st.session_state.selected_page_ranges, 
+                                    prompt,
+                                    top_k,
+                                    [],
+                                    web_search,
+                                    llm_model,
+                                    draft_mode, 
+                                    True
+                                )
+
                 st.session_state.sources.append({
                     "top_k_metadata": top_k_metadata,
                     "answer": answer,
