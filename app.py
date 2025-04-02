@@ -784,7 +784,7 @@ def load_dict_from_json(file_path):
 
 # Load the MPNet model
 mpnet_model = SentenceTransformer("sentence-transformers/all-mpnet-base-v2")
-secrets_file = "../secrets.json"
+secrets_file = "..\secrets.json"
 
 SECRETS = load_dict_from_json(secrets_file)
 
@@ -818,7 +818,7 @@ connection_string = SECRETS["connection_string"]
 s3_bucket_name = SECRETS["container_name"]
 
 # Users File Path 
-users_file = "../users.json"
+users_file = "..\users.json"
 
 # Define a helper function to display your company logo
 def display_logo():
@@ -1288,8 +1288,8 @@ def user_has_file_access(username, file_name):
     AND the user is either the owner or is in that file's shared_with list.
     """
     for record in metadata_store:
-        if record["filename"] == file_name:
-            if record["owner"] == username or username in record.get("shared_with", []):
+        if record.get("filename") == file_name:
+            if record.get("owner") == username or username in record.get("shared_with", []):
                 return True
     return False
 
@@ -2603,17 +2603,16 @@ def main():
             if st.session_state.get("rename_mode") == conv_id:
                 new_label = st.sidebar.text_input("Rename Conversation", value=default_label, key=f"rename_input_{conv_id}")
                 if st.sidebar.button("Save", key=f"save_rename_{conv_id}"):
-                    conv["label"] = new_label
-                    # Update the conversation in the chat history for the current user.
                     user = st.session_state.username
                     if user in st.session_state.chat_history:
-                        for stored_conv in st.session_state.chat_history[user]:
+                        for idx, stored_conv in enumerate(st.session_state.chat_history[user]):
                             if stored_conv.get("timestamp") == conv_id:
-                                stored_conv["label"] = new_label
-                                break
+                                # Only update the label
+                                st.session_state.chat_history[user][idx]["label"] = new_label
+                                break 
                     save_chat_history(st.session_state.chat_history)
-                    st.session_state["rename_mode"] = None  # Exit rename mode.
-                    st.sidebar.success("Conversation renamed!")
+                    st.session_state["rename_mode"] = None
+                    st.sidebar.success("✅ Conversation renamed successfully!")
                     st.rerun()
             else:
                 col1, col2, col3, col4 = st.sidebar.columns([0.5, 0.2, 0.2, 0.1])
@@ -2657,8 +2656,12 @@ def main():
 
         # If a conversation is marked for deletion, confirm deletion.
         if "confirm_delete_conv" in st.session_state:
-            st.sidebar.warning("Are you sure you want to delete this conversation? This action cannot be undone.")
-            ccol1, ccol2 = st.sidebar.columns(2)
+            chat_name = (
+                st.session_state["confirm_delete_conv"].get("label")
+                or st.session_state["confirm_delete_conv"].get('messages', [{}])[0].get("content", "")[:50]
+            )
+            st.warning(f"Are you sure you want to delete '{chat_name}' conversation?")
+            ccol1, ccol2 = st.columns(2)
             with ccol1:
                 if st.button("Confirm Delete"):
                     user = st.session_state.username
@@ -2798,16 +2801,16 @@ def main():
             with st.spinner("Searching documents..."):
                 st.markdown("**While you wait, Feel free to Refer to the Original Documents or Play a Relaxing Game**")
 
-                for file_key in st.session_state.selected_file:
+                for file_key in st.session_state.selected_files:
                     # Generate the pre-signed URL for each file
                     preview_url = get_presigned_url(file_key)
                     # Create a clickable markdown link; clicking it will open the file in a new tab
                     st.markdown(f"[**{file_key}**]({preview_url})", unsafe_allow_html=True)
 
-                st.markdown("[Play Space Galaga](http://127.0.0.1:8000/)")
-                st.markdown("[Play Snake Game](http://127.0.0.1:8001/)")
-                st.markdown("[Play Atari Breakout](http://127.0.0.1:8002/)")
-                st.markdown("[Play Endless Runner](http://127.0.0.1:8003/)")
+                st.markdown("[Play Space Galaga](http://127.0.0.1:5500/space.html)")
+                st.markdown("[Play Snake Game](http://127.0.0.1:5500/snake.html)")
+                st.markdown("[Play Atari Breakout](http://127.0.0.1:5500/atari.html)")
+                st.markdown("[Play Endless Runner](http://127.0.0.1:5500/surfer.html)")
 
 
                 top_k_metadata, answer, ws_response = query_documents_with_page_range(
