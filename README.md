@@ -1,3 +1,5 @@
+# For Issues with PyMuPDF: sudo apt-get install libgl1
+
 # nexus_gstdost_
 
 Project Overview
