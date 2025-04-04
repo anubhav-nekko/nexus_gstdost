@@ -2832,7 +2832,7 @@ def main():
                                 "user_query": f"User Query: {user_message}\n\nLast 5 Messages: {last_messages}"
                             }
 
-                            prompt = call_gpt_api(summary_prompt_dict["system_message"], summary_prompt_dict["user_query"])
+                            prompt = call_claude_api(summary_prompt_dict["system_message"], summary_prompt_dict["user_query"])
 
                             if "error" in prompt and "bedrock" in prompt:
                                 last_messages = st.session_state.messages[-2:] if len(st.session_state.messages) >= 2 else st.session_state.messages
@@ -2841,7 +2841,7 @@ def main():
                                     "user_query": f"User Query: {user_message}\n\nLast 5 Messages: {last_messages}"
                                 }
 
-                                prompt = call_gpt_api(summary_prompt_dict["system_message"], summary_prompt_dict["user_query"])
+                                prompt = call_claude_api(summary_prompt_dict["system_message"], summary_prompt_dict["user_query"])
 
                             top_k_metadata, answer, ws_response = query_documents_with_page_range(
                                 st.session_state.selected_files, 
@@ -2867,6 +2867,14 @@ def main():
                                     draft_mode, 
                                     True
                                 )
+                                if "error" in answer and "bedrock" in answer:
+                                    top_k_metadata = []
+                                    answer = """Looks Like you have Reached the Model Limits. Follow the following Steps:
+                                    1. Try Starting a New Chat (Ensure to Add the same Files you were working on)
+                                    2. If the Above Does not Work, Enable `Analyze Mode` on the side panel and try again
+                                    3. If the Above two do not work, try switching the model or reduce the topK slider.
+                                    """
+                                    ws_response = ""
 
                 st.session_state.sources.append({
                     "top_k_metadata": top_k_metadata,
