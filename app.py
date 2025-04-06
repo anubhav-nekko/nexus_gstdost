@@ -794,6 +794,7 @@ aws_secret_access_key = SECRETS["aws_secret_access_key"]
 INFERENCE_PROFILE_ARN = SECRETS["INFERENCE_PROFILE_ARN"]
 INFERENCE_PROFILE_CLAUDE = SECRETS["INFERENCE_PROFILE_CLAUDE"]
 INFERENCE_PROFILE_DEEPSEEK = SECRETS["INFERENCE_PROFILE_DEEPSEEK"]
+INFERENCE_PROFILE_NOVALITE = SECRETS["INFERENCE_PROFILE_NOVALITE"]
 REGION = SECRETS["REGION"]
 REGION2 = SECRETS["REGION2"]
 GPT_ENDPOINT = SECRETS["GPT_ENDPOINT"]
@@ -1017,6 +1018,38 @@ def call_llm_api(system_message, user_query):
         # Invoke the model (Claude)
         response = bedrock_runtime2.invoke_model(
             modelId=INFERENCE_PROFILE_ARN,  # Use the ARN for your inference profile
+            contentType='application/json',
+            accept='application/json',
+            body=json.dumps(payload)
+        )
+
+        # Parse and return the response
+        response_body = json.loads(response['body'].read())
+        return response_body['content'][0]['text']
+
+    except Exception as e:
+        return f"An error occurred: {str(e)}"
+    
+def call_novalite_api(system_message, user_query):
+    # Combine system and user messages
+    messages = system_message + user_query
+
+    # Prepare the request payload
+    payload = {
+        "anthropic_version": "bedrock-2023-05-31",
+        "max_tokens": 4096,
+        "messages": [
+            {
+                "role": "user",
+                "content": messages
+            }
+        ]
+    }
+
+    try:
+        # Invoke the model (Claude)
+        response = bedrock_runtime2.invoke_model(
+            modelId=INFERENCE_PROFILE_NOVALITE,  # Use the ARN for your inference profile
             contentType='application/json',
             accept='application/json',
             body=json.dumps(payload)
@@ -1613,7 +1646,7 @@ def query_documents_viz(selected_files, selected_page_ranges, query, top_k, web_
 #     return top_k_metadata, answer, ws_response
 
 
-def query_documents_with_page_range(selected_files, selected_page_ranges, prompt, top_k, last_messages, web_search, llm_model, draft_mode, analyse_mode):
+def query_documents_with_page_range(selected_files, selected_page_ranges, prompt, top_k, last_messages, web_search, llm_model, draft_mode, analyse_mode, eco_mode):
     # print(selected_files)
     # print(selected_page_ranges)
 
@@ -1632,8 +1665,11 @@ def query_documents_with_page_range(selected_files, selected_page_ranges, prompt
     }
     ```
     '''
-
-    prompts = call_llm_api(qp_prompt["system_message"], qp_prompt["user_query"]+op_format)
+    if eco_mode:
+        prompts = call_novalite_api(qp_prompt["system_message"], qp_prompt["user_query"]+op_format)
+    else:
+        prompts = call_llm_api(qp_prompt["system_message"], qp_prompt["user_query"]+op_format)
+    
     print(prompts)
     try:
         # return json.loads(answer[7:-3])
@@ -1676,7 +1712,7 @@ def query_documents_with_page_range(selected_files, selected_page_ranges, prompt
                 min_page, max_page = selected_page_ranges.get(file, (None, None))
                 if min_page is not None and max_page is not None:
                     # Use the summary prompt as the system message (you may have a variable 'summary_prompt' already defined).
-                    summary = summarize_document_pages(file, min_page, max_page, summary_prompt)
+                    summary = summarize_document_pages(file, min_page, max_page, summary_prompt, eco_mode)
                     summaries.append({file: summary})
                     # with cols[idx]:
         top_k_metadata = summaries
@@ -1746,7 +1782,11 @@ def query_documents_with_page_range(selected_files, selected_page_ranges, prompt
             "Each topic should appear on its own line, starting with a dash (-)."
             "Adhere to the conversation and context to understand what formatting and style you should follow and what content you should present."
         )
-        topics_response = call_llm_api(sys_msg, bullet_prompt+wsp)
+        if eco_mode:
+            topics_response = call_novalite_api(sys_msg, bullet_prompt+wsp)
+        else:
+            topics_response = call_llm_api(sys_msg, bullet_prompt+wsp)
+        
         topics = [line.lstrip(" -").strip() for line in topics_response.split("\n") if line.strip()]
         total_topics = len(topics)
 
@@ -1762,7 +1802,10 @@ def query_documents_with_page_range(selected_files, selected_page_ranges, prompt
                 "3. Make sure not to repeat information already included in previous sections.\n"
                 "4. Adhere to the conversation and context to understand what formatting and style you should follow and what content you should present."
             )
-            detailed_response = call_llm_api(sys_msg, elaboration_prompt+wsp)
+            if eco_mode:
+                detailed_response = call_novalite_api(sys_msg, elaboration_prompt+wsp)
+            else:
+                detailed_response = call_llm_api(sys_msg, elaboration_prompt+wsp)
             final_draft += f"\n\n# {topic}:\n{detailed_response}"
             st.info(f"Drafting for topic {index}/{total_topics} ({topic}) completed.")
 
@@ -1847,7 +1890,7 @@ def final_format(top_k_metadata, answer, ws_response):
         # return json.loads(answer[3:-3])
         return json.loads(answer.split("```")[1].split("```")[0])
     
-def summarize_document_pages(filename, start_page, end_page, summary_prompt):
+def summarize_document_pages(filename, start_page, end_page, summary_prompt, eco_mode=False):
     """
     Summarize document pages for a given file using overlapping chunks if needed.
     Retrieves text from the metadata_store for pages in [start_page, end_page].
@@ -1863,7 +1906,10 @@ def summarize_document_pages(filename, start_page, end_page, summary_prompt):
     # If the selected pages are less than 20, summarize in one go.
     if total_pages < 50:
         user_query = f"Summarize the following document text from Document {filename} \n{full_text}"
-        summary = call_llm_api(summary_prompt, user_query)
+        if eco_mode:
+            summary = call_novalite_api(summary_prompt, user_query)
+        else:
+            summary = call_llm_api(summary_prompt, user_query)
         return summary
 
     # Else, create overlapping chunks.
@@ -1881,7 +1927,10 @@ def summarize_document_pages(filename, start_page, end_page, summary_prompt):
         # chunk_text = json.dumps(pages[j] for j in range(start_idx, end_idx))
         chunk_text = json.dumps([pages[j] for j in range(start_idx, end_idx)])
         user_query = f"Summarize the following document from file `{filename}` text:\n{chunk_text}"
-        chunk_summary = call_llm_api(summary_prompt, user_query)
+        if eco_mode:
+            chunk_summary = call_novalite_api(summary_prompt, user_query)
+        else:
+            chunk_summary = call_llm_api(summary_prompt, user_query)
         chunk_summaries.append(chunk_summary)
         # Advance by base_chunk_size minus the overlap.
         i += (base_chunk_size - overlap)
@@ -1889,7 +1938,10 @@ def summarize_document_pages(filename, start_page, end_page, summary_prompt):
     # Consolidate the chunk summaries into a final summary.
     consolidation_prompt = summary_prompt + "\n\nPlease consolidate the following summaries into one overall summary:"
     consolidation_input = json.dumps(chunk_summaries)
-    final_summary = call_llm_api(consolidation_prompt, consolidation_input)
+    if eco_mode:
+        final_summary = call_novalite_api(consolidation_prompt, consolidation_input)
+    else:
+        final_summary = call_llm_api(consolidation_prompt, consolidation_input)
     return final_summary
 
 def get_web_recommendations(document_summaries, insights):
@@ -2822,7 +2874,8 @@ def main():
                     web_search,
                     llm_model,
                     draft_mode, 
-                    analyse_mode
+                    analyse_mode,
+                    eco_mode
                 )
 
                 if "error" in answer.lower():
@@ -2831,8 +2884,10 @@ def main():
                                 "system_message": "You are an intelligent query refiner. Your job is to take a user's original query (which may contain poor grammar or informal language) along with the last 5 messages of the conversation and Summarise it into a Detailed Concise Message which explains what the user is asking for. Ensure you do not miss any details",
                                 "user_query": f"User Query: {user_message}\n\nLast 5 Messages: {last_messages}"
                             }
-
-                            prompt = call_claude_api(summary_prompt_dict["system_message"], summary_prompt_dict["user_query"])
+                            if eco_mode:
+                                prompt = call_novalite_api(summary_prompt_dict["system_message"], summary_prompt_dict["user_query"])
+                            else:
+                                prompt = call_claude_api(summary_prompt_dict["system_message"], summary_prompt_dict["user_query"])
 
                             if "error" in prompt and "bedrock" in prompt:
                                 last_messages = st.session_state.messages[-2:] if len(st.session_state.messages) >= 2 else st.session_state.messages
@@ -2840,8 +2895,10 @@ def main():
                                     "system_message": "You are an intelligent query refiner. Your job is to take a user's original query (which may contain poor grammar or informal language) along with the last 5 messages of the conversation and Summarise it into a Detailed Concise Message which explains what the user is asking for. Ensure you do not miss any details",
                                     "user_query": f"User Query: {user_message}\n\nLast 5 Messages: {last_messages}"
                                 }
-
-                                prompt = call_claude_api(summary_prompt_dict["system_message"], summary_prompt_dict["user_query"])
+                                if eco_mode:
+                                    prompt = call_novalite_api(summary_prompt_dict["system_message"], summary_prompt_dict["user_query"])
+                                else:
+                                    prompt = call_claude_api(summary_prompt_dict["system_message"], summary_prompt_dict["user_query"])
 
                             top_k_metadata, answer, ws_response = query_documents_with_page_range(
                                 st.session_state.selected_files, 
@@ -2852,7 +2909,8 @@ def main():
                                 web_search,
                                 llm_model,
                                 draft_mode, 
-                                analyse_mode
+                                analyse_mode, 
+                                eco_mode
                             )
 
                             if "error" in answer and "bedrock" in answer:
@@ -2865,7 +2923,8 @@ def main():
                                     web_search,
                                     llm_model,
                                     draft_mode, 
-                                    True
+                                    True,
+                                    eco_mode
                                 )
                                 if "error" in answer and "bedrock" in answer:
                                     top_k_metadata = []
@@ -3031,7 +3090,7 @@ def main():
         st.header("Query Advanced")
         st.sidebar.header("Settings")
         llm_model = st.sidebar.selectbox("Choose Your Model", ["Claude 3.7 Sonnet", "Claude 3.5 Sonnet", "Deepseek R1", "GPT 4o"])
-
+        eco_mode = st.sidebar.toggle("Eco Mode", value=True)
         web_search = st.sidebar.toggle("Enable Web Search")
         top_k = st.sidebar.slider("Select Top-K Results", min_value=1, max_value=100, value=50, step=1)
 
