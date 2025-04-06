@@ -2695,9 +2695,9 @@ def main():
 
         # Insert the share-chat snippet below the conversation list:
         if st.session_state.get("share_chat_mode"):
-            st.sidebar.header("Share Chat Conversation")
-            share_chat_with = st.sidebar.multiselect("Select user(s) to share with", options=available_usernames)
-            if st.sidebar.button("Confirm Share Chat"):
+            st.header("Share Chat Conversation")
+            share_chat_with = st.multiselect("Select user(s) to share with", options=available_usernames)
+            if st.button("Confirm Share Chat"):
                 chat_to_share = st.session_state["share_chat_conv"]
                 # For each target user, append a deep copy of the conversation
                 for user in share_chat_with:
@@ -2706,7 +2706,7 @@ def main():
                     else:
                         st.session_state.chat_history[user] = [copy.deepcopy(chat_to_share)]
                 save_chat_history(st.session_state.chat_history)
-                st.sidebar.success("Chat conversation shared successfully!")
+                st.success("Chat conversation shared successfully!")
                 # Reset share mode variables
                 st.session_state["share_chat_mode"] = False
                 st.session_state.pop("share_chat_conv", None)
