@@ -784,7 +784,7 @@ def load_dict_from_json(file_path):
 
 # Load the MPNet model
 mpnet_model = SentenceTransformer("sentence-transformers/all-mpnet-base-v2")
-secrets_file = "..\secrets.json"
+secrets_file = "../secrets.json"
 
 SECRETS = load_dict_from_json(secrets_file)
 
@@ -819,7 +819,7 @@ connection_string = SECRETS["connection_string"]
 s3_bucket_name = SECRETS["container_name"]
 
 # Users File Path 
-users_file = "..\users.json"
+users_file = "../users.json"
 
 # Define a helper function to display your company logo
 def display_logo():
@@ -2538,7 +2538,7 @@ def main():
             st.session_state.selected_files = []
             st.session_state.selected_page_ranges = {}
             st.success("Started a new conversation.")
-
+        eco_mode = st.sidebar.toggle("Eco Mode", value=True)
         web_search = st.sidebar.toggle("Enable Web Search")
         draft_mode = st.sidebar.toggle("Enable Draft Mode (To Generate Documents/ Arguments)")
         analyse_mode = st.sidebar.toggle("Enable Analyse Mode (For Deeper Analysis and Search) [Consumes more Tokens]")
