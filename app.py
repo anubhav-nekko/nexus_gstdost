@@ -1666,7 +1666,14 @@ def query_documents_with_page_range(selected_files, selected_page_ranges, prompt
     ```
     '''
     if eco_mode:
-        prompts = call_novalite_api(qp_prompt["system_message"], qp_prompt["user_query"]+op_format)
+        semantic_search_prompt = call_novalite_api(qp_prompt["system_message"], qp_prompt["user_query"]+"Give the semantic_search_prompt only for now and nothing else")
+        web_search_prompt = call_novalite_api(qp_prompt["system_message"], qp_prompt["user_query"]+"Give the web_search_prompt only for now and nothing else")
+        prompts = json.dumps(
+                        {
+                "semantic_search_prompt": semantic_search_prompt,
+                "web_search_prompt": web_search_prompt
+            }
+                )
     else:
         prompts = call_llm_api(qp_prompt["system_message"], qp_prompt["user_query"]+op_format)
     
