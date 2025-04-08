@@ -1650,190 +1650,506 @@ def query_documents_viz(selected_files, selected_page_ranges, query, top_k, web_
 #     return top_k_metadata, answer, ws_response
 
 
-def query_documents_with_page_range(selected_files, selected_page_ranges, prompt, top_k, last_messages, web_search, llm_model, draft_mode, analyse_mode, eco_mode):
-    # print(selected_files)
-    # print(selected_page_ranges)
+# def query_documents_with_page_range(selected_files, selected_page_ranges, prompt, top_k, last_messages, web_search, llm_model, draft_mode, analyse_mode, eco_mode):
+#     # print(selected_files)
+#     # print(selected_page_ranges)
 
-    qp_prompt = {
-        "system_message": "You are an intelligent query refiner. Your job is to take a user's original query (which may contain poor grammar or informal language) along with the last 5 messages of the conversation and generate two well-formed prompts: one for a semantic search over a FAISS index and another for a web search. The semantic search prompt should improve the user's provided query, incorporating the last 5 messages for better contextual understanding. The web search prompt should refine the query further to fetch relevant legal resources online. Output only a JSON object with 'semantic_search_prompt' and 'web_search_prompt' as keys.",
-        "user_query": f"User Query: {prompt}\n\nLast 5 Messages: {last_messages}\n\nGenerate the JSON output with the two improved prompts."
-    }
+#     qp_prompt = {
+#         "system_message": "You are an intelligent query refiner. Your job is to take a user's original query (which may contain poor grammar or informal language) along with the last 5 messages of the conversation and generate two well-formed prompts: one for a semantic search over a FAISS index and another for a web search. The semantic search prompt should improve the user's provided query, incorporating the last 5 messages for better contextual understanding. The web search prompt should refine the query further to fetch relevant legal resources online. Output only a JSON object with 'semantic_search_prompt' and 'web_search_prompt' as keys.",
+#         "user_query": f"User Query: {prompt}\n\nLast 5 Messages: {last_messages}\n\nGenerate the JSON output with the two improved prompts."
+#     }
 
-    op_format = '''
-    # Output Format:
+#     op_format = '''
+#     # Output Format:
     
-    ```json
-    {
-        "semantic_search_prompt": "Refined user query using proper grammar and context from last 5 messages, optimized for FAISS index retrieval.",
-        "web_search_prompt": "Further refined query designed to fetch relevant legal resources from the web."
-    }
-    ```
-    '''
-    if eco_mode:
-        semantic_search_prompt = call_novalite_api(qp_prompt["system_message"], qp_prompt["user_query"]+"Give the semantic_search_prompt only for now and nothing else")
-        web_search_prompt = call_novalite_api(qp_prompt["system_message"], qp_prompt["user_query"]+"Give the web_search_prompt only for now and nothing else")
-        prompts = json.dumps(
-                        {
-                "semantic_search_prompt": semantic_search_prompt,
-                "web_search_prompt": web_search_prompt
-            }
-                )
-    else:
-        prompts = call_llm_api(qp_prompt["system_message"], qp_prompt["user_query"]+op_format)
+#     ```json
+#     {
+#         "semantic_search_prompt": "Refined user query using proper grammar and context from last 5 messages, optimized for FAISS index retrieval.",
+#         "web_search_prompt": "Further refined query designed to fetch relevant legal resources from the web."
+#     }
+#     ```
+#     '''
+#     if eco_mode:
+#         semantic_search_prompt = call_novalite_api(qp_prompt["system_message"], qp_prompt["user_query"]+"Give the semantic_search_prompt only for now and nothing else")
+#         web_search_prompt = call_novalite_api(qp_prompt["system_message"], qp_prompt["user_query"]+"Give the web_search_prompt only for now and nothing else")
+#         prompts = json.dumps(
+#                         {
+#                 "semantic_search_prompt": semantic_search_prompt,
+#                 "web_search_prompt": web_search_prompt
+#             }
+#                 )
+#     else:
+#         prompts = call_llm_api(qp_prompt["system_message"], qp_prompt["user_query"]+op_format)
     
-    print(prompts)
-    try:
-        # return json.loads(answer[7:-3])
-        prompt_op = json.loads(prompts.split("```json")[1].split("```")[0])
-    except:
-        # return json.loads(answer[3:-3])
-        try:
-            prompt_op = json.loads(prompts)
-        except:
-            prompt_op = json.loads(prompts.split("```")[1].split("```")[0])
-    print(prompt_op)
-    query = prompt_op["semantic_search_prompt"]
+#     print(prompts)
+#     try:
+#         # return json.loads(answer[7:-3])
+#         prompt_op = json.loads(prompts.split("```json")[1].split("```")[0])
+#     except:
+#         # return json.loads(answer[3:-3])
+#         try:
+#             prompt_op = json.loads(prompts)
+#         except:
+#             prompt_op = json.loads(prompts.split("```")[1].split("```")[0])
+#     print(prompt_op)
+#     query = prompt_op["semantic_search_prompt"]
 
-    query_embedding = generate_titan_embeddings(query).reshape(1, -1)
-    if faiss_index.ntotal == 0:
-        st.error("The FAISS index is empty. Please upload a PDF to populate the index.")
-        return [], "No data available to query.", ""
+#     query_embedding = generate_titan_embeddings(query).reshape(1, -1)
+#     if faiss_index.ntotal == 0:
+#         st.error("The FAISS index is empty. Please upload a PDF to populate the index.")
+#         return [], "No data available to query.", ""
 
-    # Fetch all metadata for the given query
-    k = faiss_index.ntotal  # Initial broad search
-    distances, indices = faiss_index.search(query_embedding, k)
+#     # Fetch all metadata for the given query
+#     k = faiss_index.ntotal  # Initial broad search
+#     distances, indices = faiss_index.search(query_embedding, k)
     
-    filtered_results = []
-    for dist, idx in zip(distances[0], indices[0]):
-        if idx < len(metadata_store):
-            metadata = metadata_store[idx]
-            if metadata['filename'] in selected_files:
-                min_page, max_page = selected_page_ranges.get(metadata['filename'], (None, None))
-                if min_page and max_page and min_page <= metadata['page'] <= max_page:
-                    filtered_results.append((dist, idx))
+#     filtered_results = []
+#     for dist, idx in zip(distances[0], indices[0]):
+#         if idx < len(metadata_store):
+#             metadata = metadata_store[idx]
+#             if metadata['filename'] in selected_files:
+#                 min_page, max_page = selected_page_ranges.get(metadata['filename'], (None, None))
+#                 if min_page and max_page and min_page <= metadata['page'] <= max_page:
+#                     filtered_results.append((dist, idx))
     
-    # Limit to topK after filtering
-    top_k_results = sorted(filtered_results, key=lambda x: x[0])[:top_k]
-    top_k_metadata = [metadata_store[idx] for _, idx in top_k_results]
+#     # Limit to topK after filtering
+#     top_k_results = sorted(filtered_results, key=lambda x: x[0])[:top_k]
+#     top_k_metadata = [metadata_store[idx] for _, idx in top_k_results]
 
-    if analyse_mode:
-        summaries = []
-        for idx, file in enumerate(selected_files):
-                # Get the page range for the file.
-                min_page, max_page = selected_page_ranges.get(file, (None, None))
-                if min_page is not None and max_page is not None:
-                    # Use the summary prompt as the system message (you may have a variable 'summary_prompt' already defined).
-                    summary = summarize_document_pages(file, min_page, max_page, summary_prompt, eco_mode)
-                    summaries.append({file: summary})
-                    # with cols[idx]:
-        top_k_metadata = summaries
+#     if analyse_mode:
+#         summaries = []
+#         for idx, file in enumerate(selected_files):
+#                 # Get the page range for the file.
+#                 min_page, max_page = selected_page_ranges.get(file, (None, None))
+#                 if min_page is not None and max_page is not None:
+#                     # Use the summary prompt as the system message (you may have a variable 'summary_prompt' already defined).
+#                     summary = summarize_document_pages(file, min_page, max_page, summary_prompt, eco_mode)
+#                     summaries.append({file: summary})
+#                     # with cols[idx]:
+#         top_k_metadata = summaries
 
-    user_query = f"""
+#     user_query = f"""
 
-    # User Query:
-    <<<{prompt}>>>
+#     # User Query:
+#     <<<{prompt}>>>
 
-    # The top K most relevant contexts fetched from the documents are as follows:
-    {json.dumps(top_k_metadata, indent=4)}
+#     # The top K most relevant contexts fetched from the documents are as follows:
+#     {json.dumps(top_k_metadata, indent=4)}
 
-    # The last few messages of the conversation to help you maintain continuity and relevance:
-    {json.dumps(last_messages)}
+#     # The last few messages of the conversation to help you maintain continuity and relevance:
+#     {json.dumps(last_messages)}
+#     """
+
+#     ws_response = ""
+#     wsp = ""
+
+#     if web_search or analyse_mode or draft_mode:
+#         ws_query = prompt_op["web_search_prompt"]
+#         # Call the LLM API to get the answer
+#         # To install, run: pip install tavily-python
+
+
+#         client = TavilyClient(api_key=TAVILY_API)
+
+#         ws_response = client.search(
+#             query=ws_query,
+#             search_depth="advanced",
+#             include_raw_content=True
+#         )
+
+#         print(ws_response)
+
+#         wsp = f"""
+#         # Feel free to use the Web Search Results for Additional Context as well:
+#         Please ensure your output is concise, well-organized, and each resource hyperlink is clickable. Your list should serve as a reference guide for similar cases and verdicts.
+
+#         {json.dumps(ws_response)}
+#         """
+    
+#     if draft_mode:
+#         # Construct a structured system message with clear sections.
+#         sys_msg = (
+#             "You are a Helpful Legal Data Analyst specializing in legal document analysis.\n"
+#             "Your task is to draft a legal document/ text/ article based on the following inputs. Follow these steps:\n"
+#             "1. Review the User Query, Document Context, and Conversation History.\n"
+#             "2. Generate a bullet list of key topics for the document.\n"
+#             "3. For each topic, draft a detailed section ensuring continuity and avoiding repetition.\n\n"
+#             "4. Always present your outputs in Proper Markdown Formatting"
+#             "-----\n"
+#             "User Query:\n"
+#             f"{prompt}\n"
+#             "-----\n"
+#             "Document Context (Top K relevant):\n"
+#             f"{json.dumps(top_k_metadata, indent=2)}\n"
+#             "-----\n"
+#             "Conversation History (Last few messages):\n"
+#             f"{json.dumps(last_messages, indent=2)}\n"
+#             "-----\n"
+#         )
+
+#         # Step 1: Generate bullet list of topics.
+#         bullet_prompt = (
+#             "Based on the above, generate a detailed bullet list of topics for drafting a document. (Like a Table of Contents)"
+#             "Each topic should appear on its own line, starting with a dash (-)."
+#             "Adhere to the conversation and context to understand what formatting and style you should follow and what content you should present."
+#         )
+#         if eco_mode:
+#             topics_response = call_novalite_api(sys_msg, bullet_prompt+wsp)
+#         else:
+#             topics_response = call_llm_api(sys_msg, bullet_prompt+wsp)
+        
+#         topics = [line.lstrip(" -").strip() for line in topics_response.split("\n") if line.strip()]
+#         total_topics = len(topics)
+
+#         final_draft = ""
+#         # Draft each topic section iteratively with a progress message.
+#         for index, topic in enumerate(topics, start=1):
+#             elaboration_prompt = (
+#                 f"Draft a detailed section for the topic: '{topic}'.\n\n"
+#                 "Use the following context to ensure continuity:\n"
+#                 "1. The User Query and Document Context provided above.\n"
+#                 "2. The draft generated so far:\n"
+#                 f"{final_draft}\n"
+#                 "3. Make sure not to repeat information already included in previous sections.\n"
+#                 "4. Adhere to the conversation and context to understand what formatting and style you should follow and what content you should present."
+#             )
+#             if eco_mode:
+#                 detailed_response = call_novalite_api(sys_msg, elaboration_prompt+wsp)
+#             else:
+#                 detailed_response = call_llm_api(sys_msg, elaboration_prompt+wsp)
+#             final_draft += f"\n\n# {topic}:\n{detailed_response}"
+#             st.info(f"Drafting for topic {index}/{total_topics} ({topic}) completed.")
+
+#         return [], final_draft, ""
+    
+#     if llm_model=="Claude 3.5 Sonnet":
+#         answer = call_llm_api(system_message, user_query+wsp)
+#     elif llm_model=="GPT 4o":
+#         answer = call_gpt_api(system_message, user_query+wsp)
+#     elif llm_model=="Claude 3.7 Sonnet":
+#         answer = call_claude_api(system_message, user_query+wsp)
+#     elif llm_model=="Nova Lite":
+#         answer = call_novalite_api(system_message, user_query+wsp)
+#     elif llm_model=="Deepseek R1":
+#         answer = call_deepseek_api(system_message, user_query+wsp)
+
+#     return top_k_metadata, answer, ws_response
+
+def query_documents_with_page_range(
+    selected_files,
+    selected_page_ranges,
+    prompt,
+    top_k,
+    last_messages,
+    web_search,
+    llm_model,
+    draft_mode,
+    analyse_mode,
+    eco_mode
+):
+    """
+    Multi-agent version of your query function.
+    Input/Output signature is unchanged:
+      Returns (top_k_metadata, answer, ws_response).
+    Internally:
+      1) Prompt Chunking Agent (for large user input)
+      2) Planner Agent -> decides tasks
+      3) Retrieval Agent -> gets doc chunks
+      4) Analysis Agent -> optional summarizing or comparison
+      5) Drafting Agent -> if draft_mode, build a multi-section doc
+      6) Q&A Agent -> final answer if not drafting
     """
 
+    # ----------------------------------------------------------------
+    # AGENT 0: PROMPT CHUNKING FOR VERY LARGE USER QUERIES
+    # ----------------------------------------------------------------
+    # If the user’s prompt is huge (e.g. 2,000+ words), do a short summarization
+    words_in_prompt = prompt.split()
+    if len(words_in_prompt) > 2000:
+        if eco_mode:
+            prompt = call_novalite_api(
+                "You are a text-summarization agent. Summarize the following user prompt in 300 words or fewer.",
+                " ".join(words_in_prompt)
+            )
+        else:
+            prompt = call_llm_api(
+                "You are a text-summarization agent. Summarize the following user prompt in 300 words or fewer.",
+                " ".join(words_in_prompt)
+            )
+
+    # ----------------------------------------------------------------
+    # AGENT 1: PLANNER AGENT
+    # ----------------------------------------------------------------
+    # This agent decides the “plan”: which steps to execute. For example:
+    # - retrieval is always needed
+    # - analysis if analyse_mode is True
+    # - drafting if draft_mode is True
+    # - possible web search if `web_search` is True or if the plan sees it relevant
+    #
+    # For demonstration, we do a *simple* plan: always do retrieval, then
+    # analysis (if requested), drafting (if requested), else Q&A.
+    # But you *could* call an LLM that returns a JSON plan with steps.
+
+    def planner_agent(user_prompt, last_5_messages, draft_mode, analyse_mode, web_search):
+        # Simplified approach: always retrieve
+        plan = {
+            "tasks": []
+        }
+        plan["tasks"].append("retrieval")
+        if analyse_mode:
+            plan["tasks"].append("analysis")
+        if draft_mode:
+            plan["tasks"].append("drafting")
+        else:
+            plan["tasks"].append("qna")
+
+        # We'll do a web search if the user explicitly toggled
+        if web_search:
+            plan["web_search"] = True
+        else:
+            plan["web_search"] = False
+
+        return plan
+
+    plan = planner_agent(prompt, last_messages, draft_mode, analyse_mode, web_search)
+
+    # We'll store final outputs here
+    top_k_metadata = []
+    answer = ""
     ws_response = ""
-    wsp = ""
 
-    if web_search or analyse_mode or draft_mode:
-        ws_query = prompt_op["web_search_prompt"]
-        # Call the LLM API to get the answer
-        # To install, run: pip install tavily-python
+    # ----------------------------------------------------------------
+    # AGENT 2: RETRIEVAL AGENT (Semantic Search in FAISS)
+    # ----------------------------------------------------------------
+    # We basically replicate your “refinement” step + retrieval
+    # to get relevant doc chunks.
 
+    def retrieval_agent(user_prompt, last_msgs, files, file_page_ranges, topk, eco_mode):
+        """
+        1) Refine user prompt into "semantic_search_prompt" + "web_search_prompt".
+        2) Embedding-based search in FAISS, filtered by selected files & page ranges.
+        3) Return top_k_metadata, plus the refined web search query if needed.
+        """
+        # Step 2a: call “query refiner” to get semantic & web prompts
+        # (like your original code).
+        refine_system = (
+            "You are an intelligent query refiner. Take the user query + last 5 messages. "
+            "Return a JSON with 'semantic_search_prompt' & 'web_search_prompt'."
+        )
+        refine_user = f"User Query: {user_prompt}\n\nLast 5 Messages: {last_msgs}\n\n"
+        op_format = '''
+            Output a JSON:
+            ```json
+            {
+                "semantic_search_prompt": "...",
+                "web_search_prompt": "..."
+            }
+            ```
+        '''
+        if eco_mode:
+            # For simpler/cheaper calls
+            sem_prompt = call_novalite_api(refine_system, refine_user + "Give ONLY the semantic_search_prompt.")
+            web_prompt = call_novalite_api(refine_system, refine_user + "Give ONLY the web_search_prompt.")
+            refined_json = json.dumps({
+                "semantic_search_prompt": sem_prompt,
+                "web_search_prompt": web_prompt
+            })
+        else:
+            refined_json = call_llm_api(refine_system, refine_user + op_format)
 
+        # Parse the JSON
+        try:
+            rp = json.loads(refined_json.split("```json")[1].split("```")[0])
+        except:
+            try:
+                rp = json.loads(refined_json)
+            except:
+                rp = json.loads(refined_json.split("```")[1].split("```")[0])
+
+        semantic_search_prompt = rp["semantic_search_prompt"]
+        web_search_prompt = rp["web_search_prompt"]
+
+        # Step 2b: do the FAISS search
+        embedding = generate_titan_embeddings(semantic_search_prompt).reshape(1, -1)
+        if faiss_index.ntotal == 0:
+            return [], "", "FAISS index is empty."
+
+        # Search entire index
+        k = faiss_index.ntotal
+        distances, indices = faiss_index.search(embedding, k)
+
+        # Filter by user’s chosen files & page ranges
+        results = []
+        for dist, idx in zip(distances[0], indices[0]):
+            if idx < len(metadata_store):
+                meta = metadata_store[idx]
+                if meta["filename"] in files:
+                    (pg_min, pg_max) = file_page_ranges.get(meta["filename"], (None, None))
+                    if pg_min and pg_max and (pg_min <= meta["page"] <= pg_max):
+                        results.append((dist, idx))
+
+        # Keep top_k
+        results_sorted = sorted(results, key=lambda x: x[0])[:topk]
+        top_k_md = [metadata_store[r[1]] for r in results_sorted]
+
+        return top_k_md, web_search_prompt, None  # No error msg
+
+    if "retrieval" in plan["tasks"]:
+        top_k_metadata, web_search_str, retrieval_error = retrieval_agent(
+            prompt, last_messages,
+            selected_files, selected_page_ranges,
+            top_k, eco_mode
+        )
+        if retrieval_error:
+            # If index is empty or something, we return early
+            return [], retrieval_error, ""
+
+    # ----------------------------------------------------------------
+    # (OPTIONAL) WEB SEARCH
+    # ----------------------------------------------------------------
+    # If the plan indicates web search is needed, we do it here
+    if plan.get("web_search", False) or analyse_mode or draft_mode:
+        # You can adapt how you want the “web_search_str” used:
         client = TavilyClient(api_key=TAVILY_API)
-
         ws_response = client.search(
-            query=ws_query,
+            query=web_search_str,
             search_depth="advanced",
             include_raw_content=True
         )
 
-        print(ws_response)
-
-        wsp = f"""
-        # Feel free to use the Web Search Results for Additional Context as well:
-        Please ensure your output is concise, well-organized, and each resource hyperlink is clickable. Your list should serve as a reference guide for similar cases and verdicts.
-
-        {json.dumps(ws_response)}
+    # ----------------------------------------------------------------
+    # AGENT 3: ANALYSIS AGENT (If `analyse_mode` = True)
+    # ----------------------------------------------------------------
+    # Summarize or “compare arguments” or “highlight missing points” etc.
+    def analysis_agent(doc_chunks, files, file_ranges, eco_mode):
         """
-    
-    if draft_mode:
-        # Construct a structured system message with clear sections.
+        Example: Summarize each selected file’s range.
+        Or do deeper analysis (like comparing arguments).
+        For now, we just return a list of {file: summary}.
+        """
+        results = []
+        for f in files:
+            (pg_min, pg_max) = file_ranges.get(f, (None, None))
+            if pg_min and pg_max:
+                summary_text = summarize_document_pages(
+                    f, pg_min, pg_max,
+                    summary_prompt,  # already in your code
+                    eco_mode
+                )
+                results.append({f: summary_text})
+        return results
+
+    if "analysis" in plan["tasks"]:
+        # Replace top_k_metadata with the summaries for the entire file range
+        top_k_metadata = analysis_agent(top_k_metadata, selected_files, selected_page_ranges, eco_mode)
+
+    # ----------------------------------------------------------------
+    # AGENT 4: DRAFTING AGENT (If `draft_mode` = True)
+    # ----------------------------------------------------------------
+    # Stepwise approach: bullet-list of topics, then expand each.
+
+    def drafting_agent(user_query, doc_context, conv_history, ws_resp, eco):
+        """
+        1) Generate bullet list (like a table of contents).
+        2) Expand each item -> final doc.
+        Returns the entire drafted text.
+        """
+        # system prompt
         sys_msg = (
             "You are a Helpful Legal Data Analyst specializing in legal document analysis.\n"
-            "Your task is to draft a legal document/ text/ article based on the following inputs. Follow these steps:\n"
-            "1. Review the User Query, Document Context, and Conversation History.\n"
-            "2. Generate a bullet list of key topics for the document.\n"
-            "3. For each topic, draft a detailed section ensuring continuity and avoiding repetition.\n\n"
-            "4. Always present your outputs in Proper Markdown Formatting"
-            "-----\n"
-            "User Query:\n"
-            f"{prompt}\n"
-            "-----\n"
-            "Document Context (Top K relevant):\n"
-            f"{json.dumps(top_k_metadata, indent=2)}\n"
-            "-----\n"
-            "Conversation History (Last few messages):\n"
-            f"{json.dumps(last_messages, indent=2)}\n"
-            "-----\n"
+            "Task: draft a legal text. Steps:\n"
+            "1) Outline main topics.\n"
+            "2) Draft each topic in detail.\n"
+            "3) Use final Markdown.\n"
         )
+        # Combine everything
+        context_str = f"""
+        User Query: {user_query}
+        Document Context: {json.dumps(doc_context, indent=2)}
+        Conversation History: {json.dumps(conv_history, indent=2)}
+        """
+        if ws_resp:
+            context_str += f"\nWeb Search Results: {json.dumps(ws_resp)}"
 
-        # Step 1: Generate bullet list of topics.
-        bullet_prompt = (
-            "Based on the above, generate a detailed bullet list of topics for drafting a document. (Like a Table of Contents)"
-            "Each topic should appear on its own line, starting with a dash (-)."
-            "Adhere to the conversation and context to understand what formatting and style you should follow and what content you should present."
-        )
-        if eco_mode:
-            topics_response = call_novalite_api(sys_msg, bullet_prompt+wsp)
+        # (A) Generate bullet list
+        bullet_prompt = "Generate a bullet list of topics (each line with a dash)"
+        if eco:
+            bullet_list = call_novalite_api(sys_msg, context_str + bullet_prompt)
         else:
-            topics_response = call_llm_api(sys_msg, bullet_prompt+wsp)
-        
-        topics = [line.lstrip(" -").strip() for line in topics_response.split("\n") if line.strip()]
-        total_topics = len(topics)
+            bullet_list = call_llm_api(sys_msg, context_str + bullet_prompt)
 
-        final_draft = ""
-        # Draft each topic section iteratively with a progress message.
-        for index, topic in enumerate(topics, start=1):
-            elaboration_prompt = (
-                f"Draft a detailed section for the topic: '{topic}'.\n\n"
-                "Use the following context to ensure continuity:\n"
-                "1. The User Query and Document Context provided above.\n"
-                "2. The draft generated so far:\n"
-                f"{final_draft}\n"
-                "3. Make sure not to repeat information already included in previous sections.\n"
-                "4. Adhere to the conversation and context to understand what formatting and style you should follow and what content you should present."
-            )
-            if eco_mode:
-                detailed_response = call_novalite_api(sys_msg, elaboration_prompt+wsp)
+        topics = [
+            line.lstrip(" -").strip() for line in bullet_list.split("\n") if line.strip()
+        ]
+
+        final_doc = ""
+        # (B) Expand each topic
+        for i, topic in enumerate(topics, start=1):
+            st.info(f"Drafting section {i}/{len(topics)}: {topic}")
+            expand_prompt = f"Draft a section for '{topic}'\n\nDraft so far:\n{final_doc}"
+            if eco:
+                part = call_novalite_api(sys_msg, context_str + expand_prompt)
             else:
-                detailed_response = call_llm_api(sys_msg, elaboration_prompt+wsp)
-            final_draft += f"\n\n# {topic}:\n{detailed_response}"
-            st.info(f"Drafting for topic {index}/{total_topics} ({topic}) completed.")
+                part = call_llm_api(sys_msg, context_str + expand_prompt)
+            final_doc += f"\n\n## {topic}\n{part}"
 
-        return [], final_draft, ""
-    
-    if llm_model=="Claude 3.5 Sonnet":
-        answer = call_llm_api(system_message, user_query+wsp)
-    elif llm_model=="GPT 4o":
-        answer = call_gpt_api(system_message, user_query+wsp)
-    elif llm_model=="Claude 3.7 Sonnet":
-        answer = call_claude_api(system_message, user_query+wsp)
-    elif llm_model=="Nova Lite":
-        answer = call_novalite_api(system_message, user_query+wsp)
-    elif llm_model=="Deepseek R1":
-        answer = call_deepseek_api(system_message, user_query+wsp)
+        return final_doc
 
-    return top_k_metadata, answer, ws_response
+    if "drafting" in plan["tasks"]:
+        # We skip final Q&A and just return the drafted doc
+        drafted_text = drafting_agent(
+            prompt,
+            top_k_metadata,
+            last_messages,
+            ws_response,
+            eco_mode
+        )
+        return [], drafted_text, ""  # No ws_response needed if we want to keep it empty
+
+    # ----------------------------------------------------------------
+    # AGENT 5: Q&A AGENT
+    # ----------------------------------------------------------------
+    # If not drafting, we do final Q&A. Combine doc chunks + web search info
+    # with your global system_message.
+    # Return the final “answer.”
+
+    def qna_agent(user_query, doc_context, conv_history, ws_resp, chosen_model):
+        # Build user_query text
+        combined_context = f"""
+        # User Query:
+        {user_query}
+
+        # Document Excerpts:
+        {json.dumps(doc_context, indent=4)}
+
+        # Last messages:
+        {json.dumps(conv_history)}
+
+        # Web Search (if any):
+        {json.dumps(ws_resp)}
+        """
+        # Now call the chosen LLM
+        if chosen_model == "Claude 3.5 Sonnet":
+            ans = call_llm_api(system_message, combined_context)
+        elif chosen_model == "GPT 4o":
+            ans = call_gpt_api(system_message, combined_context)
+        elif chosen_model == "Claude 3.7 Sonnet":
+            ans = call_claude_api(system_message, combined_context)
+        elif chosen_model == "Nova Lite":
+            ans = call_novalite_api(system_message, combined_context)
+        elif chosen_model == "Deepseek R1":
+            ans = call_deepseek_api(system_message, combined_context)
+        else:
+            ans = call_llm_api(system_message, combined_context)
+        return ans
+
+    if "qna" in plan["tasks"]:
+        answer = qna_agent(prompt, top_k_metadata, last_messages, ws_response, llm_model)
+        return top_k_metadata, answer, ws_response
+
+    # If for some reason we get here without returning:
+    # fallback
+    return top_k_metadata, "No final step chosen by plan.", ws_response
 
 
 def final_format(top_k_metadata, answer, ws_response):
@@ -2891,62 +3207,62 @@ def main():
                     eco_mode
                 )
 
-                if "error" in answer.lower():
-                    if "bedrock" in answer.lower() or "tavily" in answer.lower():
-                            summary_prompt_dict = {
-                                "system_message": "You are an intelligent query refiner. Your job is to take a user's original query (which may contain poor grammar or informal language) along with the last 5 messages of the conversation and Summarise it into a Detailed Concise Message which explains what the user is asking for. Ensure you do not miss any details",
-                                "user_query": f"User Query: {user_message}\n\nLast 5 Messages: {last_messages}"
-                            }
-                            if eco_mode:
-                                prompt = call_novalite_api(summary_prompt_dict["system_message"], summary_prompt_dict["user_query"])
-                            else:
-                                prompt = call_claude_api(summary_prompt_dict["system_message"], summary_prompt_dict["user_query"])
+                # if "error" in answer.lower():
+                #     if "bedrock" in answer.lower() or "tavily" in answer.lower():
+                #             summary_prompt_dict = {
+                #                 "system_message": "You are an intelligent query refiner. Your job is to take a user's original query (which may contain poor grammar or informal language) along with the last 5 messages of the conversation and Summarise it into a Detailed Concise Message which explains what the user is asking for. Ensure you do not miss any details",
+                #                 "user_query": f"User Query: {user_message}\n\nLast 5 Messages: {last_messages}"
+                #             }
+                #             if eco_mode:
+                #                 prompt = call_novalite_api(summary_prompt_dict["system_message"], summary_prompt_dict["user_query"])
+                #             else:
+                #                 prompt = call_claude_api(summary_prompt_dict["system_message"], summary_prompt_dict["user_query"])
 
-                            if "error" in prompt and "bedrock" in prompt:
-                                last_messages = st.session_state.messages[-2:] if len(st.session_state.messages) >= 2 else st.session_state.messages
-                                summary_prompt_dict = {
-                                    "system_message": "You are an intelligent query refiner. Your job is to take a user's original query (which may contain poor grammar or informal language) along with the last 5 messages of the conversation and Summarise it into a Detailed Concise Message which explains what the user is asking for. Ensure you do not miss any details",
-                                    "user_query": f"User Query: {user_message}\n\nLast 5 Messages: {last_messages}"
-                                }
-                                if eco_mode:
-                                    prompt = call_novalite_api(summary_prompt_dict["system_message"], summary_prompt_dict["user_query"])
-                                else:
-                                    prompt = call_claude_api(summary_prompt_dict["system_message"], summary_prompt_dict["user_query"])
+                #             if "error" in prompt and "bedrock" in prompt:
+                #                 last_messages = st.session_state.messages[-2:] if len(st.session_state.messages) >= 2 else st.session_state.messages
+                #                 summary_prompt_dict = {
+                #                     "system_message": "You are an intelligent query refiner. Your job is to take a user's original query (which may contain poor grammar or informal language) along with the last 5 messages of the conversation and Summarise it into a Detailed Concise Message which explains what the user is asking for. Ensure you do not miss any details",
+                #                     "user_query": f"User Query: {user_message}\n\nLast 5 Messages: {last_messages}"
+                #                 }
+                #                 if eco_mode:
+                #                     prompt = call_novalite_api(summary_prompt_dict["system_message"], summary_prompt_dict["user_query"])
+                #                 else:
+                #                     prompt = call_claude_api(summary_prompt_dict["system_message"], summary_prompt_dict["user_query"])
 
-                            top_k_metadata, answer, ws_response = query_documents_with_page_range(
-                                st.session_state.selected_files, 
-                                st.session_state.selected_page_ranges, 
-                                prompt,
-                                top_k,
-                                [],
-                                web_search,
-                                llm_model,
-                                draft_mode, 
-                                analyse_mode, 
-                                eco_mode
-                            )
+                #             top_k_metadata, answer, ws_response = query_documents_with_page_range(
+                #                 st.session_state.selected_files, 
+                #                 st.session_state.selected_page_ranges, 
+                #                 prompt,
+                #                 top_k,
+                #                 [],
+                #                 web_search,
+                #                 llm_model,
+                #                 draft_mode, 
+                #                 analyse_mode, 
+                #                 eco_mode
+                #             )
 
-                            if "error" in answer and "bedrock" in answer:
-                                top_k_metadata, answer, ws_response = query_documents_with_page_range(
-                                    st.session_state.selected_files, 
-                                    st.session_state.selected_page_ranges, 
-                                    prompt,
-                                    top_k,
-                                    [],
-                                    web_search,
-                                    llm_model,
-                                    draft_mode, 
-                                    True,
-                                    eco_mode
-                                )
-                                if "error" in answer and "bedrock" in answer:
-                                    top_k_metadata = []
-                                    answer = """Looks Like you have Reached the Model Limits. Follow the following Steps:
-                                    1. Try Starting a New Chat (Ensure to Add the same Files you were working on)
-                                    2. If the Above Does not Work, Enable `Analyze Mode` on the side panel and try again
-                                    3. If the Above two do not work, try switching the model or reduce the topK slider.
-                                    """
-                                    ws_response = ""
+                #             if "error" in answer and "bedrock" in answer:
+                #                 top_k_metadata, answer, ws_response = query_documents_with_page_range(
+                #                     st.session_state.selected_files, 
+                #                     st.session_state.selected_page_ranges, 
+                #                     prompt,
+                #                     top_k,
+                #                     [],
+                #                     web_search,
+                #                     llm_model,
+                #                     draft_mode, 
+                #                     True,
+                #                     eco_mode
+                #                 )
+                #                 if "error" in answer and "bedrock" in answer:
+                #                     top_k_metadata = []
+                #                     answer = """Looks Like you have Reached the Model Limits. Follow the following Steps:
+                #                     1. Try Starting a New Chat (Ensure to Add the same Files you were working on)
+                #                     2. If the Above Does not Work, Enable `Analyze Mode` on the side panel and try again
+                #                     3. If the Above two do not work, try switching the model or reduce the topK slider.
+                #                     """
+                #                     ws_response = ""
 
                 st.session_state.sources.append({
                     "top_k_metadata": top_k_metadata,
