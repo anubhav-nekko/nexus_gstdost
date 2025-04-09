@@ -1036,13 +1036,18 @@ def call_novalite_api(system_message, user_query):
 
     # Prepare the request payload
     payload = {
-        "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 4096,
+        "inferenceConfig": {
+        "max_new_tokens": 4096
+        },
         "messages": [
+        {
+            "role": "user",
+            "content": [
             {
-                "role": "user",
-                "content": messages
+                "text": messages
             }
+            ]
+        }
         ]
     }
 
