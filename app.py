@@ -1870,7 +1870,7 @@ def query_documents_with_page_range(
     # ----------------------------------------------------------------
     # If the user’s prompt is huge (e.g. 2,000+ words), do a short summarization
     words_in_prompt = prompt.split()
-    if len(words_in_prompt) > 2000:
+    if len(words_in_prompt) > 4000:
         if eco_mode:
             prompt = call_novalite_api(
                 "You are a text-summarization agent. Summarize the following user prompt in 300 words or fewer.",
