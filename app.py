@@ -1062,7 +1062,8 @@ def call_novalite_api(system_message, user_query):
 
         # Parse and return the response
         response_body = json.loads(response['body'].read())
-        return response_body['content'][0]['text']
+        print(response_body)
+        return response_body['output']['message']['content'][0]['text']
 
     except Exception as e:
         return f"An error occurred: {str(e)}"
