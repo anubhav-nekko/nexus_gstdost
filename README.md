@@ -38,6 +38,9 @@ Run the Streamlit app:
 
 streamlit run app.py
 
+python -m http.server 5500
+
+
 You can also open individual HTML files in a browser to play the arcade-style games.
 
 *Files and Directories*
