@@ -1481,373 +1481,334 @@ def query_documents_viz(selected_files, selected_page_ranges, query, top_k, web_
 
     return answer
 
-# def query_documents_with_page_range(
-#     selected_files,
-#     selected_page_ranges,
-#     prompt,
-#     top_k,
-#     last_messages,
-#     web_search,
-#     llm_model,
-#     draft_mode,
-#     analyse_mode,
-#     eco_mode
-# ):
-#     """
-#     Multi-agent version of your query function.
-#     Returns (top_k_metadata, answer, ws_response).
-#     Internally:
-#       1) Prompt Chunking Agent (for large user input)
-#       2) Planner Agent -> decides tasks
-#       3) Retrieval Agent -> gets doc chunks
-#       4) Analysis Agent -> optional summarizing or comparison
-#       5) Drafting Agent -> if draft_mode, build a multi-section doc
-#       6) Q&A Agent -> final answer if not drafting
-#     """
 
-#     # ----------------------------------------------------------------
-#     # AGENT 0: PROMPT CHUNKING FOR VERY LARGE USER QUERIES
-#     # ----------------------------------------------------------------
-#     words_in_prompt = prompt.split()
-#     if len(words_in_prompt) > 4000:
-#         if eco_mode:
-#             prompt = call_novalite_api(
-#                 "You are a text-summarization agent. Summarize the following user prompt in 300 words or fewer.",
-#                 " ".join(words_in_prompt)
-#             )
-#         else:
-#             prompt = call_llm_api(
-#                 "You are a text-summarization agent. Summarize the following user prompt in 300 words or fewer.",
-#                 " ".join(words_in_prompt)
-#             )
+#############################
+# PLANNER AGENT
+#############################
 
-#     # ----------------------------------------------------------------
-#     # AGENT 1: PLANNER AGENT
-#     # ----------------------------------------------------------------
-#     def planner_agent(user_prompt, last_5_messages, draft_mode, analyse_mode, web_search):
-#         plan = {"tasks": []}
-#         plan["tasks"].append("retrieval")
-#         if analyse_mode:
-#             plan["tasks"].append("analysis")
-#         if draft_mode:
-#             plan["tasks"].append("drafting")
-#         else:
-#             plan["tasks"].append("qna")
-
-#         plan["web_search"] = bool(web_search)
-#         return plan
-
-#     plan = planner_agent(prompt, last_messages, draft_mode, analyse_mode, web_search)
-
-#     top_k_metadata = []
-#     answer = ""
-#     ws_response = ""
-
-#     # ----------------------------------------------------------------
-#     # AGENT 2: RETRIEVAL AGENT
-#     # ----------------------------------------------------------------
-#     def retrieval_agent(user_prompt, last_msgs, files, file_page_ranges, topk, eco_mode):
-#         """
-#         1) Refine user prompt into 'semantic_search_prompt' & 'web_search_prompt'.
-#         2) Embedding-based semantic search over FAISS.
-#         3) Filter by user’s chosen files & page ranges.
-#         4) Return top_k_metadata, plus the refined web search query.
-#         """
-#         refine_system = (
-#             "You are an intelligent query refiner. Take the user query + last messages. "
-#             "Return a JSON with 'semantic_search_prompt' & 'web_search_prompt'."
-#         )
-#         refine_user = f"User Query: {user_prompt}\n\nLast Messages: {last_msgs}\n\n"
-#         op_format = '''
-#             Output JSON:
-#             ```json
-#             {
-#                 "semantic_search_prompt": "...",
-#                 "web_search_prompt": "..."
-#             }
-#             ```
-#         '''
-#         if eco_mode:
-#             # For simpler/cheaper calls
-#             sem_prompt = call_novalite_api(refine_system, refine_user + "Give ONLY the semantic_search_prompt.")
-#             web_prompt = call_novalite_api(refine_system, refine_user + "Give ONLY the web_search_prompt.")
-#             refined_json = json.dumps({
-#                 "semantic_search_prompt": sem_prompt,
-#                 "web_search_prompt": web_prompt
-#             })
-#         else:
-#             refined_json = call_llm_api(refine_system, refine_user + op_format)
-
-#         # Parse the JSON
-#         try:
-#             rp = json.loads(refined_json.split("```json")[1].split("```")[0])
-#         except:
-#             try:
-#                 rp = json.loads(refined_json)
-#             except:
-#                 rp = json.loads(refined_json.split("```")[1].split("```")[0])
-
-#         semantic_search_prompt = rp["semantic_search_prompt"]
-#         web_search_prompt = rp["web_search_prompt"]
-
-#         # Step 2b: do the FAISS search
-#         embedding = generate_titan_embeddings(semantic_search_prompt).reshape(1, -1)
-#         if faiss_index.ntotal == 0:
-#             return [], "", "FAISS index is empty."
-
-#         k = faiss_index.ntotal
-#         distances, indices = faiss_index.search(embedding, k)
-
-#         # Filter by user’s chosen files & page ranges
-#         results = []
-#         for dist, idx in zip(distances[0], indices[0]):
-#             if idx < len(metadata_store):
-#                 meta = metadata_store[idx]
-#                 if meta["filename"] in files:
-#                     (pg_min, pg_max) = file_page_ranges.get(meta["filename"], (None, None))
-#                     # Page-range check
-#                     if pg_min and pg_max and (pg_min <= meta["page"] <= pg_max):
-#                         results.append((dist, idx))
-
-#         # Keep top_k
-#         results_sorted = sorted(results, key=lambda x: x[0])[:topk]
-#         top_k_md = [metadata_store[r[1]] for r in results_sorted]
-
-#         return top_k_md, web_search_prompt, None
-
-#     if "retrieval" in plan["tasks"]:
-#         top_k_metadata, web_search_str, retrieval_error = retrieval_agent(
-#             prompt,
-#             last_messages,
-#             selected_files,
-#             selected_page_ranges,
-#             top_k,
-#             eco_mode
-#         )
-#         if retrieval_error:
-#             return [], retrieval_error, ""
-
-#     # ----------------------------------------------------------------
-#     # (OPTIONAL) WEB SEARCH
-#     # ----------------------------------------------------------------
-#     if plan.get("web_search", False):
-#         client = TavilyClient(api_key=TAVILY_API)
-#         ws_response = client.search(
-#             query=web_search_str,
-#             search_depth="advanced",
-#             include_raw_content=True
-#         )
-
-#     # ----------------------------------------------------------------
-#     # AGENT 3: ANALYSIS AGENT (enhanced “deep research” style)
-#     # ----------------------------------------------------------------
-#     # --- NEW/CHANGED ---
-#     def analysis_agent(doc_context, ws_data, eco_mode):
-#         """
-#         Combine document chunks + web search data and produce a thorough summary.
-#         Think of it as a 'deep research mode': gather context from both sources
-#         and unify them into a single, coherent overview or set of insights.
-#         """
-#         sys_msg = (
-#             "You are a 'deep research' analysis agent. Given the doc chunks and any web info, "
-#             "produce a thorough, high-level summary highlighting key points, arguments, or "
-#             "findings. Include comparisons if relevant, and don't omit important nuances."
-#         )
-#         # Combine doc_context + ws_data into one big text
-#         combined_text = f"DOCUMENT EXCERPTS:\n{json.dumps(doc_context, indent=2)}\n\nWEB RESULTS:\n{json.dumps(ws_data, indent=2)}"
-
-#         if eco_mode:
-#             summary = call_novalite_api(sys_msg, combined_text)
-#         else:
-#             summary = call_llm_api(sys_msg, combined_text)
-
-#         # Return a single "summary chunk" in place of top_k_metadata
-#         return [{"analysis_summary": summary}]
-
-#     if "analysis" in plan["tasks"]:
-#         top_k_metadata = analysis_agent(top_k_metadata, ws_response, eco_mode)
-
-#     # ----------------------------------------------------------------
-#     # AGENT 4: DRAFTING AGENT (improved outline + detail)
-#     # ----------------------------------------------------------------
-#     # --- NEW/CHANGED ---
-#     def drafting_agent(user_query, doc_context, conv_history, ws_resp, eco):
-#         """
-#         1) Generate a hierarchical outline (headings + sub-points).
-#         2) Expand each heading in detail while preserving continuity and proper Markdown.
-#         3) Return the final drafted text in well-formatted Markdown.
-#         """
-#         sys_msg = (
-#             "You are a helpful legal data analyst specializing in drafting. "
-#             "First generate a structured outline (headings + subpoints) for the user's request. "
-#             "Then expand each section in detail, preserving continuity and referencing relevant doc context. "
-#             "Final output should be in Markdown with headings, subheadings, bullet points, etc."
-#         )
-
-#         # Combine everything into a single context string for the LLM:
-#         context_str = f"""
-#         ## User Query
-#         {user_query}
-
-#         ## Document Context
-#         {json.dumps(doc_context, indent=2)}
-
-#         ## Conversation History
-#         {json.dumps(conv_history, indent=2)}
-
-#         ## Web Search Results
-#         {json.dumps(ws_resp, indent=2)}
-#         """
-
-#         # Step (A): Ask the model for a JSON-based outline with headings/subpoints
-#         outline_prompt = (
-#             "First, produce a hierarchical outline (JSON format) with a structure like:\n\n"
-#             "```json\n"
-#             "{\n"
-#             "  \"title\": \"Your Proposed Title\",\n"
-#             "  \"sections\": [\n"
-#             "    {\n"
-#             "      \"heading\": \"Heading 1\",\n"
-#             "      \"subpoints\": [\"Point A\", \"Point B\"]\n"
-#             "    },\n"
-#             "    {\n"
-#             "      \"heading\": \"Heading 2\",\n"
-#             "      \"subpoints\": [\"Point C\", \"Point D\"]\n"
-#             "    }\n"
-#             "  ]\n"
-#             "}\n"
-#             "```\n\n"
-#             "Only return valid JSON. Do not include any markdown yet."
-#         )
-
-#         if eco:
-#             outline_json_str = call_novalite_api(sys_msg, context_str + "\n\n" + outline_prompt)
-#         else:
-#             outline_json_str = call_llm_api(sys_msg, context_str + "\n\n" + outline_prompt)
-
-#         # Parse the JSON outline
-#         # We'll try a few ways in case there's extra text
-#         try:
-#             parsed_outline = json.loads(outline_json_str.strip().split("```json")[1].split("```")[0])
-#         except:
-#             try:
-#                 parsed_outline = json.loads(outline_json_str)
-#             except:
-#                 # fallback attempt
-#                 start = outline_json_str.find("{")
-#                 end = outline_json_str.rfind("}") + 1
-#                 fallback_str = outline_json_str[start:end]
-#                 parsed_outline = json.loads(fallback_str)
-
-#         # Step (B): Expand each section in a single pass. 
-#         # Alternatively, you could iterate and expand each separately for more detail.
-#         expansion_prompt = (
-#             "Now expand the outline into a full draft, in Markdown. "
-#             "Include headings/subheadings from the outline. Under each heading, address the listed subpoints. "
-#             "Use references from the Document Context or Web Results where relevant. "
-#             "Maintain continuity across sections."
-#         )
-
-#         # We'll provide the parsed JSON outline plus context
-#         expand_input = f"""
-#         Outline:
-#         {json.dumps(parsed_outline, indent=2)}
-
-#         {context_str}
-#         """
-
-#         if eco:
-#             final_draft = call_novalite_api(sys_msg, expand_input + "\n\n" + expansion_prompt)
-#         else:
-#             final_draft = call_llm_api(sys_msg, expand_input + "\n\n" + expansion_prompt)
-
-#         return final_draft
-
-#     if "drafting" in plan["tasks"]:
-#         drafted_text = drafting_agent(
-#             prompt,
-#             top_k_metadata,
-#             last_messages,
-#             ws_response,
-#             eco_mode
-#         )
-#         return [], drafted_text, ""
-
-#     # ----------------------------------------------------------------
-#     # AGENT 5: Q&A AGENT
-#     # ----------------------------------------------------------------
-#     def qna_agent(user_query, doc_context, conv_history, ws_resp, chosen_model):
-#         combined_context = f"""
-#         # User Query:
-#         {user_query}
-
-#         # Document Excerpts:
-#         {json.dumps(doc_context, indent=4)}
-
-#         # Last messages:
-#         {json.dumps(conv_history)}
-
-#         # Web Search (if any):
-#         {json.dumps(ws_resp)}
-#         """
-
-#         if chosen_model == "Claude 3.5 Sonnet":
-#             ans = call_llm_api(system_message, combined_context)
-#         elif chosen_model == "GPT 4o":
-#             ans = call_gpt_api(system_message, combined_context)
-#         elif chosen_model == "Claude 3.7 Sonnet":
-#             ans = call_claude_api(system_message, combined_context)
-#         elif chosen_model == "Nova Lite":
-#             ans = call_novalite_api(system_message, combined_context)
-#         elif chosen_model == "Deepseek R1":
-#             ans = call_deepseek_api(system_message, combined_context)
-#         else:
-#             ans = call_llm_api(system_message, combined_context)
-
-#         return ans
-
-#     if "qna" in plan["tasks"]:
-#         answer = qna_agent(prompt, top_k_metadata, last_messages, ws_response, llm_model)
-#         return top_k_metadata, answer, ws_response
-
-#     return top_k_metadata, "No final step chosen by plan.", ws_response
-
-# 1) NEW HELPER: Removes references to "Kamal Envirotech" & trims older messages
-def sanitize_conversation_history(conv_history, max_messages=5):
+def planner_agent(prompt, last_messages, draft_mode, analyse_mode, web_search):
     """
-    1. Keep only the last `max_messages` user or assistant turns.
-    2. Remove or replace any references to "Kamal Envirotech" or repeated text segments.
-    3. Return a sanitized conversation list.
+    Decides which steps (analysis, drafting, qna) to run.
+    """
+    plan = {"tasks": []}
+
+    # Always do retrieval
+    plan["tasks"].append("retrieval")
+
+    # Add 'analysis' if user toggled 'analyse_mode'
+    if analyse_mode:
+        plan["tasks"].append("analysis")
+
+    # If user toggled 'draft_mode', do drafting
+    if draft_mode:
+        plan["tasks"].append("drafting")
+    else:
+        # otherwise do normal Q&A
+        plan["tasks"].append("qna")
+
+    # Whether or not to do web search
+    plan["web_search"] = bool(web_search)
+    return plan
+
+#############################
+# RETRIEVAL AGENT
+#############################
+
+def retrieval_agent(user_prompt, last_msgs, files, file_page_ranges, topk, eco_mode,
+                    metadata_store, faiss_index):
+    """
+    1) Generate refined queries (semantic_search_prompt + web_search_prompt).
+    2) Embed & search across FAISS index.
+    3) Filter by user-chosen files and page ranges.
+    4) Return top_k_metadata & refined web search query string.
     """
 
-    # (A) Keep only the last N messages to avoid huge repeated text.
-    trimmed = conv_history[-max_messages:] if len(conv_history) > max_messages else conv_history
+    # Step A: Let the model refine the query if desired
+    refine_system = (
+        "You are an intelligent query refiner. "
+        "Take the user query + last messages. "
+        "Return a JSON with 'semantic_search_prompt' & 'web_search_prompt'."
+    )
+    refine_user = f"User Query: {user_prompt}\n\nLast Messages: {last_msgs}\n\n"
+    op_format = """
+        Output JSON:
+        ```json
+        {
+            "semantic_search_prompt": "...",
+            "web_search_prompt": "..."
+        }
+        ```
+    """
 
-    # (B) Remove references to "Kamal Envirotech" or repeated lines. 
-    #     For demonstration, we do a simple regex that replaces the phrase with a placeholder "[Case Ref]".
-    sanitized = []
-    for entry in trimmed:
-        # The entry might be a user message or an assistant message dict; ensure we sanitize the "content".
-        new_content = re.sub(r"\bKamal Envirotech\b", "[Case Ref]", entry.get("content", ""), flags=re.IGNORECASE)
+    if eco_mode:
+        refined_json = call_novalite_api(refine_system, refine_user + op_format)
+    else:
+        refined_json = call_llm_api(refine_system, refine_user + op_format)
+
+    # Parse the JSON
+    try:
+        # Attempt extracting from code-fenced JSON
+        rp = json.loads(refined_json.split("```json")[1].split("```")[0])
+    except:
+        # fallback attempts
+        try:
+            rp = json.loads(refined_json)
+        except:
+            rp = json.loads(refined_json.split("```")[1].split("```")[0])
+
+    semantic_search_prompt = rp.get("semantic_search_prompt", user_prompt)
+    web_search_prompt = rp.get("web_search_prompt", user_prompt)
+
+    # Step B: Perform embedding-based search
+    if faiss_index.ntotal == 0:
+        return [], "", "FAISS index is empty."
+
+    embedding = generate_titan_embeddings(semantic_search_prompt)
+    if embedding is None:
+        return [], "", "Error generating embeddings."
+
+    embedding = embedding.reshape(1, -1)
+
+    k = faiss_index.ntotal
+    distances, indices = faiss_index.search(embedding, k)
+
+    # Step C: Filter by user’s chosen files & page ranges
+    results = []
+    for dist, idx in zip(distances[0], indices[0]):
+        if idx < len(metadata_store):
+            meta = metadata_store[idx]
+            if meta["filename"] in files:
+                (pg_min, pg_max) = file_page_ranges.get(meta["filename"], (None, None))
+                if pg_min and pg_max and (pg_min <= meta["page"] <= pg_max):
+                    results.append((dist, idx))
+
+    # Keep topk
+    results_sorted = sorted(results, key=lambda x: x[0])[:topk]
+    top_k_md = [metadata_store[r[1]] for r in results_sorted]
+
+    return top_k_md, web_search_prompt, None
+
+#############################
+# ANALYSIS AGENT
+#############################
+
+def analysis_agent(doc_context, ws_data, eco_mode):
+    """
+    Produce a thorough multi-section 'deep researcher' style analysis.
+    Iterates over doc_context in smaller chunks for a comprehensive final text.
+    """
+    if not doc_context:
+        return [{"analysis_summary": "No relevant doc context to analyze."}]
+
+    # Break doc_context into sublists if large
+    chunk_size = 3  # adjust as you like
+    chunked = [doc_context[i:i+chunk_size] for i in range(0, len(doc_context), chunk_size)]
+
+    final_sections = []
+    sys_msg = (
+        "You are a 'deep research' analysis agent. For each chunk, produce a detailed, multi-section analysis. "
+        "Finally, we combine them into one single Markdown text. Be thorough, referencing chunk data."
+    )
+
+    combined_web = json.dumps(ws_data, indent=2)
+
+    for i, chunk_group in enumerate(chunked, start=1):
+        chunk_text = json.dumps(chunk_group, indent=2)
+        user_prompt = f"""
+        ### Section {i} Analysis
+        Document Chunks:
+        {chunk_text}
+
+        Web Search Results:
+        {combined_web}
+
+        Requirements:
+        1. Provide multi-paragraph discussion of these chunks (like a researcher's report).
+        2. Identify key points, controversies, legal angles, or deeper insights.
+        3. Return the text in structured Markdown (with headings, bullet points, etc.).
+        """
+
+        if eco_mode:
+            section_result = call_novalite_api(sys_msg, user_prompt)
+        else:
+            section_result = call_llm_api(sys_msg, user_prompt)
+
+        final_sections.append(section_result)
+
+    # Combine them
+    big_report = "\n\n".join(final_sections)
+    return [{"analysis_summary": big_report}]
+
+#############################
+# DRAFTING AGENT
+#############################
+
+def drafting_agent(user_query, doc_context, conv_history, ws_resp, eco_mode):
+    """
+    1) Generate a JSON-based outline with multiple headings + subpoints
+    2) For each heading and subpoint, do a separate expansion call
+    3) Combine everything into a single Markdown text
+    4) No sanitization, as requested
+    """
+
+    # Step A: get outline in JSON
+    sys_outline_msg = (
+        "You are a drafting agent. First produce a hierarchical outline (JSON) with headings + subpoints. "
+        "No extra text. Example:\n"
+        "```json\n"
+        "{\n"
+        "  \"title\": \"Proposed Title\",\n"
+        "  \"sections\": [\n"
+        "    {\n"
+        "      \"heading\": \"Heading 1\",\n"
+        "      \"subpoints\": [\"Point A\", \"Point B\"]\n"
+        "    },\n"
+        "    {\n"
+        "      \"heading\": \"Heading 2\",\n"
+        "      \"subpoints\": [\"Point C\", \"Point D\"]\n"
+        "    }\n"
+        "  ]\n"
+        "}\n"
+        "```"
+    )
+    outline_input = f"""
+    User Query:
+    {user_query}
+
+    Document Context:
+    {json.dumps(doc_context, indent=2)}
+
+    Conversation History:
+    {json.dumps(conv_history, indent=2)}
+
+    Web Search Results:
+    {json.dumps(ws_resp, indent=2)}
+    """
+
+    if eco_mode:
+        outline_json_str = call_novalite_api(sys_outline_msg, outline_input)
+    else:
+        outline_json_str = call_llm_api(sys_outline_msg, outline_input)
+
+    # Attempt to parse
+    parsed_outline = {}
+    try:
+        if "```json" in outline_json_str:
+            raw_json = outline_json_str.split("```json")[1].split("```")[0]
+            parsed_outline = json.loads(raw_json.strip())
+        else:
+            parsed_outline = json.loads(outline_json_str.strip())
+    except:
+        parsed_outline = {
+            "title": "Draft Document",
+            "sections": [
+                {
+                    "heading": "ErrorParsingOutline",
+                    "subpoints": ["(The system couldn't parse the JSON outline)"]
+                }
+            ]
+        }
+
+    # Step B: multi-step expansion
+    sys_expansion_msg = (
+        "You are a drafting agent. Expand each heading & subpoint thoroughly in Markdown. "
+        "Provide multi-paragraph detail, referencing doc_context if relevant. "
+        "No sanitization or brevity. Keep it professional."
+    )
+
+    doc_context_str = json.dumps(doc_context, indent=2)
+    ws_context_str = json.dumps(ws_resp, indent=2)
+
+    final_sections = []
+    doc_title = parsed_outline.get("title", "Draft Document")
+    sections = parsed_outline.get("sections", [])
+
+    for sec_index, section in enumerate(sections, start=1):
+        heading_title = section.get("heading", f"Heading {sec_index}")
+        subpoints = section.get("subpoints", [])
         
-        # Optionally: remove repeated lines that keep appearing. Example: lines repeated more than once.
-        # We'll do a simple approach: break down lines, keep only unique lines, then rejoin.
-        lines = new_content.split("\n")
-        unique_lines = []
-        seen = set()
-        for ln in lines:
-            # You might define "repeat" more specifically, but here's a simple approach:
-            if ln.strip() not in seen:
-                unique_lines.append(ln)
-                seen.add(ln.strip())
-        new_content = "\n".join(unique_lines)
+        # Intro for this heading
+        heading_prompt = f"""
+        Heading: {heading_title}
+        Provide an overview introduction in Markdown.
 
-        sanitized.append({
-            "role": entry.get("role", ""),
-            "content": new_content
-        })
-    return sanitized
+        doc_context: {doc_context_str}
+        web_search: {ws_context_str}
+        """
+        if eco_mode:
+            heading_intro = call_novalite_api(sys_expansion_msg, heading_prompt)
+        else:
+            heading_intro = call_llm_api(sys_expansion_msg, heading_prompt)
 
+        heading_block = [f"## {heading_title}\n\n{heading_intro}\n"]
+
+        # Expand each subpoint
+        for sp_index, sp_text in enumerate(subpoints, start=1):
+            subpoint_prompt = f"""
+            Heading: {heading_title}
+            Subpoint: {sp_text}
+
+            Provide a thorough, multi-paragraph explanation with bullet points or examples.
+            doc_context: {doc_context_str}
+            web_search: {ws_context_str}
+            """
+            if eco_mode:
+                sp_result = call_novalite_api(sys_expansion_msg, subpoint_prompt)
+            else:
+                sp_result = call_llm_api(sys_expansion_msg, subpoint_prompt)
+
+            heading_block.append(f"**{sp_index}.** {sp_text}\n\n{sp_result}\n")
+
+        # Combine heading content
+        final_sections.append("\n".join(heading_block))
+
+    # Step C: final single Markdown doc
+    final_doc = f"# {doc_title}\n\n" + "\n\n".join(final_sections)
+    return final_doc
+
+
+#############################
+# Q&A AGENT
+#############################
+
+def qna_agent(user_query, doc_context, conv_history, ws_data, chosen_model, system_message):
+    """
+    Simple Q&A: combine all context & pass to the chosen model.
+    """
+    combined_context = f"""
+    # User Query:
+    {user_query}
+
+    # Document Excerpts:
+    {json.dumps(doc_context, indent=4)}
+
+    # Last messages:
+    {json.dumps(conv_history, indent=2)}
+
+    # Web Search (if any):
+    {json.dumps(ws_data, indent=2)}
+    """
+
+    if chosen_model == "Claude 3.5 Sonnet":
+        ans = call_llm_api(system_message, combined_context)
+    elif chosen_model == "GPT 4o":
+        ans = call_novalite_api(system_message, combined_context)  # or call_gpt_api if you prefer
+    elif chosen_model == "Claude 3.7 Sonnet":
+        ans = call_llm_api(system_message, combined_context)  # or call_claude_api
+    elif chosen_model == "Nova Lite":
+        ans = call_novalite_api(system_message, combined_context)
+    elif chosen_model == "Deepseek R1":
+        ans = call_llm_api(system_message, combined_context)  # or call_deepseek_api
+    else:
+        ans = call_llm_api(system_message, combined_context)
+
+    return ans
+
+
+#############################
+# MAIN FUNCTION:
+# query_documents_with_page_range
+#############################
 
 def query_documents_with_page_range(
     selected_files,
@@ -1859,335 +1820,71 @@ def query_documents_with_page_range(
     llm_model,
     draft_mode,
     analyse_mode,
-    eco_mode
+    eco_mode,
+    system_message="You are an advanced legal data analyst..."
 ):
     """
-    Multi-agent version of your query function.
-    Returns (top_k_metadata, answer, ws_response).
-    Internally:
-      1) Prompt Chunking Agent (for large user input)
-      2) Planner Agent -> decides tasks
-      3) Retrieval Agent -> gets doc chunks
-      4) Analysis Agent -> optional summarizing or comparison
-      5) Drafting Agent -> if draft_mode, build a multi-section doc
-      6) Q&A Agent -> final answer if not drafting
+    Multi-agent function. Key steps:
+      1) Planner -> tasks
+      2) retrieval_agent -> doc_context
+      3) analysis_agent -> if analyse_mode
+      4) drafting_agent -> if draft_mode
+      5) else QnA
+    Returns (top_k_metadata, final_answer, ws_response).
     """
-    # ----------------------------------------------------------------
-    # AGENT 0: PROMPT CHUNKING FOR VERY LARGE USER QUERIES
-    # ----------------------------------------------------------------
-    words_in_prompt = prompt.split()
-    if len(words_in_prompt) > 4000:
-        if eco_mode:
-            prompt = call_novalite_api(
-                "You are a text-summarization agent. Summarize the following user prompt in 300 words or fewer.",
-                " ".join(words_in_prompt)
-            )
-        else:
-            prompt = call_llm_api(
-                "You are a text-summarization agent. Summarize the following user prompt in 300 words or fewer.",
-                " ".join(words_in_prompt)
-            )
-
-    # ----------------------------------------------------------------
-    # AGENT 1: PLANNER AGENT
-    # ----------------------------------------------------------------
-    def planner_agent(user_prompt, last_5_messages, draft_mode, analyse_mode, web_search):
-        plan = {"tasks": []}
-        plan["tasks"].append("retrieval")
-        if analyse_mode:
-            plan["tasks"].append("analysis")
-        if draft_mode:
-            plan["tasks"].append("drafting")
-        else:
-            plan["tasks"].append("qna")
-
-        plan["web_search"] = bool(web_search)
-        return plan
-
+    # 1) PLAN
     plan = planner_agent(prompt, last_messages, draft_mode, analyse_mode, web_search)
 
-    top_k_metadata = []
-    answer = ""
+    # 2) RETRIEVAL
+    top_k_metadata, refined_ws_query, retrieval_err = retrieval_agent(
+        user_prompt=prompt,
+        last_msgs=last_messages,
+        files=selected_files,
+        file_page_ranges=selected_page_ranges,
+        topk=top_k,
+        eco_mode=eco_mode,
+        metadata_store=metadata_store,    # Global
+        faiss_index=faiss_index          # Global
+    )
+    if retrieval_err:
+        return [], retrieval_err, ""
+
+    # 3) (optional) WEB SEARCH
     ws_response = ""
-
-    # ----------------------------------------------------------------
-    # AGENT 2: RETRIEVAL AGENT
-    # ----------------------------------------------------------------
-    def retrieval_agent(user_prompt, last_msgs, files, file_page_ranges, topk, eco_mode):
-        """
-        1) Refine user prompt into 'semantic_search_prompt' & 'web_search_prompt'.
-        2) Embedding-based semantic search over FAISS.
-        3) Filter by user’s chosen files & page ranges.
-        4) Return top_k_metadata, plus the refined web search query.
-        """
-        refine_system = (
-            "You are an intelligent query refiner. Take the user query + last messages. "
-            "Return a JSON with 'semantic_search_prompt' & 'web_search_prompt'."
-        )
-        refine_user = f"User Query: {user_prompt}\n\nLast Messages: {last_msgs}\n\n"
-        op_format = '''
-            Output JSON:
-            ```json
-            {
-                "semantic_search_prompt": "...",
-                "web_search_prompt": "..."
-            }
-            ```
-        '''
-        if eco_mode:
-            # For simpler/cheaper calls
-            sem_prompt = call_novalite_api(refine_system, refine_user + "Give ONLY the semantic_search_prompt.")
-            web_prompt = call_novalite_api(refine_system, refine_user + "Give ONLY the web_search_prompt.")
-            refined_json = json.dumps({
-                "semantic_search_prompt": sem_prompt,
-                "web_search_prompt": web_prompt
-            })
-        else:
-            refined_json = call_llm_api(refine_system, refine_user + op_format)
-
-        # Parse the JSON
-        try:
-            rp = json.loads(refined_json.split("```json")[1].split("```")[0])
-        except:
-            try:
-                rp = json.loads(refined_json)
-            except:
-                rp = json.loads(refined_json.split("```")[1].split("```")[0])
-
-        semantic_search_prompt = rp["semantic_search_prompt"]
-        web_search_prompt = rp["web_search_prompt"]
-
-        # Step 2b: do the FAISS search
-        embedding = generate_titan_embeddings(semantic_search_prompt).reshape(1, -1)
-        if faiss_index.ntotal == 0:
-            return [], "", "FAISS index is empty."
-
-        k = faiss_index.ntotal
-        distances, indices = faiss_index.search(embedding, k)
-
-        # Filter by user’s chosen files & page ranges
-        results = []
-        for dist, idx in zip(distances[0], indices[0]):
-            if idx < len(metadata_store):
-                meta = metadata_store[idx]
-                if meta["filename"] in files:
-                    (pg_min, pg_max) = file_page_ranges.get(meta["filename"], (None, None))
-                    # Page-range check
-                    if pg_min and pg_max and (pg_min <= meta["page"] <= pg_max):
-                        results.append((dist, idx))
-
-        # Keep top_k
-        results_sorted = sorted(results, key=lambda x: x[0])[:topk]
-        top_k_md = [metadata_store[r[1]] for r in results_sorted]
-
-        return top_k_md, web_search_prompt, None
-
-    if "retrieval" in plan["tasks"]:
-        top_k_metadata, web_search_str, retrieval_error = retrieval_agent(
-            prompt,
-            last_messages,
-            selected_files,
-            selected_page_ranges,
-            top_k,
-            eco_mode
-        )
-        if retrieval_error:
-            return [], retrieval_error, ""
-
-    # ----------------------------------------------------------------
-    # (OPTIONAL) WEB SEARCH
-    # ----------------------------------------------------------------
     if plan.get("web_search", False):
-        client = TavilyClient(api_key=TAVILY_API)
-        ws_response = client.search(
-            query=web_search_str,
-            search_depth="advanced",
-            include_raw_content=True
-        )
+        # If you have Tavily, do:
+        client = TavilyClient(api_key="YOUR_TAVILY_API")
+        ws_response = client.search(query=refined_ws_query, search_depth="advanced", include_raw_content=True)
 
-    # ----------------------------------------------------------------
-    # AGENT 3: ANALYSIS AGENT (enhanced “deep research” style)
-    # ----------------------------------------------------------------
-    def analysis_agent(doc_context, ws_data, eco_mode):
-        """
-        Combine document chunks + web search data and produce a thorough summary.
-        """
-        sys_msg = (
-            "You are a 'deep research' analysis agent. Given the doc chunks and any web info, "
-            "produce a thorough, high-level summary highlighting key points, arguments, or "
-            "findings. Include comparisons if relevant, and don't omit important nuances."
-        )
-        combined_text = f"DOCUMENT EXCERPTS:\n{json.dumps(doc_context, indent=2)}\n\nWEB RESULTS:\n{json.dumps(ws_data, indent=2)}"
-
-        if eco_mode:
-            summary = call_novalite_api(sys_msg, combined_text)
-        else:
-            summary = call_llm_api(sys_msg, combined_text)
-
-        # Return a single "summary chunk"
-        return [{"analysis_summary": summary}]
-
+    # 4) ANALYSIS if needed
     if "analysis" in plan["tasks"]:
+        # Replace top_k_metadata with a single item: analysis_summary
         top_k_metadata = analysis_agent(top_k_metadata, ws_response, eco_mode)
 
-    # ----------------------------------------------------------------
-    # AGENT 4: DRAFTING AGENT (improved outline + detail)
-    # ----------------------------------------------------------------
-    def drafting_agent(user_query, doc_context, conv_history, ws_resp, eco):
-        """
-        1) Sanitize the conversation to remove repeated references or forbidden text.
-        2) Generate an outline, then expand it into a draft.
-        3) Post-process the final draft to remove any lingering references or repeated lines.
-        """
-
-        # (A) Sanitize conversation history to remove references, etc.
-        sanitized_history = sanitize_conversation_history(conv_history, max_messages=5)
-
-        # (B) Build the context string with the sanitized conversation
-        context_str = f"""
-        ## User Query
-        {user_query}
-
-        ## Document Context
-        {json.dumps(doc_context, indent=2)}
-
-        ## Sanitized Conversation History
-        {json.dumps(sanitized_history, indent=2)}
-
-        ## Web Search Results
-        {json.dumps(ws_resp, indent=2)}
-        """
-
-        sys_msg = (
-            "You are a helpful legal data analyst specializing in drafting. "
-            "First generate a structured outline (headings + sub-points) for the user's request. "
-            "Then expand each section in detail, preserving continuity and referencing relevant doc context. "
-            "Do not invent case names or precedents. Do not repeat lines verbatim multiple times. "
-            "Output your final draft in Markdown."
-        )
-
-        # Step (1): Outline in JSON
-        outline_prompt = (
-            "First, produce a hierarchical outline (in JSON) with a structure like:\n\n"
-            "```json\n"
-            "{\n"
-            "  \"title\": \"Proposed Title\",\n"
-            "  \"sections\": [\n"
-            "    {\n"
-            "      \"heading\": \"Heading 1\",\n"
-            "      \"subpoints\": [\"Point A\", \"Point B\"]\n"
-            "    },\n"
-            "    {\n"
-            "      \"heading\": \"Heading 2\",\n"
-            "      \"subpoints\": [\"Point C\", \"Point D\"]\n"
-            "    }\n"
-            "  ]\n"
-            "}\n"
-            "```\n\n"
-            "Only return valid JSON. Do not include Markdown or additional text."
-        )
-
-        if eco:
-            outline_json_str = call_novalite_api(sys_msg, context_str + "\n\n" + outline_prompt)
-        else:
-            outline_json_str = call_llm_api(sys_msg, context_str + "\n\n" + outline_prompt)
-
-        try:
-            parsed_outline = json.loads(outline_json_str.strip().split("```json")[1].split("```")[0])
-        except:
-            try:
-                parsed_outline = json.loads(outline_json_str)
-            except:
-                # fallback attempt
-                start = outline_json_str.find("{")
-                end = outline_json_str.rfind("}") + 1
-                fallback_str = outline_json_str[start:end]
-                parsed_outline = json.loads(fallback_str)
-
-        # Step (2): Expand outline into a full draft (Markdown)
-        expansion_prompt = (
-            "Now expand the outline into a cohesive draft in Markdown. "
-            "Address each heading and subpoint thoroughly, but do not repeat them verbatim. "
-            "Remove any fictional or repeated references. Focus on a sound professional tone, "
-            "and do not invent case names. Keep it concise and avoid repetition."
-        )
-
-        expand_input = f"""
-        Outline:
-        {json.dumps(parsed_outline, indent=2)}
-
-        {context_str}
-        """
-
-        if eco:
-            final_draft = call_novalite_api(sys_msg, expand_input + "\n\n" + expansion_prompt)
-        else:
-            final_draft = call_llm_api(sys_msg, expand_input + "\n\n" + expansion_prompt)
-
-        # (C) Final Post-processing: remove leftover references to "Kamal Envirotech" or repeated paragraphs
-        final_draft = re.sub(r"\bKamal Envirotech\b", "[Case Ref]", final_draft, flags=re.IGNORECASE)
-
-        # Also remove repeated blocks of text over 3 lines repeated verbatim if needed
-        # (This is a naive approach. For more robust logic, you'd do something more sophisticated.)
-        lines = final_draft.split("\n")
-        seen_lines = set()
-        cleaned_lines = []
-        for ln in lines:
-            # We'll consider an entire line repeated if we've seen it exactly before
-            # This helps avoid multi-line duplication. Adjust logic to your needs.
-            if ln.strip() not in seen_lines:
-                cleaned_lines.append(ln)
-                seen_lines.add(ln.strip())
-
-        return "\n".join(cleaned_lines)
-
+    # 5) DRAFTING if needed
     if "drafting" in plan["tasks"]:
-        drafted_text = drafting_agent(
-            prompt,
-            top_k_metadata,
-            last_messages,
-            ws_response,
-            eco_mode
+        final_draft = drafting_agent(
+            user_query=prompt,
+            doc_context=top_k_metadata,
+            conv_history=last_messages,
+            ws_resp=ws_response,
+            eco_mode=eco_mode
         )
-        return [], drafted_text, ""
+        return [], final_draft, ws_response
 
-    # ----------------------------------------------------------------
-    # AGENT 5: Q&A AGENT
-    # ----------------------------------------------------------------
-    def qna_agent(user_query, doc_context, conv_history, ws_resp, chosen_model):
-        combined_context = f"""
-        # User Query:
-        {user_query}
-
-        # Document Excerpts:
-        {json.dumps(doc_context, indent=4)}
-
-        # Last messages:
-        {json.dumps(conv_history)}
-
-        # Web Search (if any):
-        {json.dumps(ws_resp)}
-        """
-
-        if chosen_model == "Claude 3.5 Sonnet":
-            ans = call_llm_api(system_message, combined_context)
-        elif chosen_model == "GPT 4o":
-            ans = call_gpt_api(system_message, combined_context)
-        elif chosen_model == "Claude 3.7 Sonnet":
-            ans = call_claude_api(system_message, combined_context)
-        elif chosen_model == "Nova Lite":
-            ans = call_novalite_api(system_message, combined_context)
-        elif chosen_model == "Deepseek R1":
-            ans = call_deepseek_api(system_message, combined_context)
-        else:
-            ans = call_llm_api(system_message, combined_context)
-
-        return ans
-
+    # 6) Otherwise Q&A
     if "qna" in plan["tasks"]:
-        answer = qna_agent(prompt, top_k_metadata, last_messages, ws_response, llm_model)
-        return top_k_metadata, answer, ws_response
+        final_answer = qna_agent(
+            user_query=prompt,
+            doc_context=top_k_metadata,
+            conv_history=last_messages,
+            ws_data=ws_response,
+            chosen_model=llm_model,
+            system_message=system_message
+        )
+        return top_k_metadata, final_answer, ws_response
 
+    # fallback
     return top_k_metadata, "No final step chosen by plan.", ws_response
 
 def final_format(top_k_metadata, answer, ws_response):
