@@ -824,7 +824,7 @@ users_file = "../users.json"
 # Define a helper function to display your company logo
 def display_logo():
     # Make sure 'logo.png' is in your working directory
-    st.image("logo.png", width=200)
+    st.image("logo.png", width=150)
 
 # # Create a Bedrock Runtime client
 # bedrock_runtime = boto3.client('bedrock-runtime', region_name=REGION,
@@ -2174,15 +2174,15 @@ def query_documents_with_page_range(
             return {}
         
         # <Your Existing Code> e.g.:
-        # client = TavilyClient(api_key=TAVILY_API)
-        # results = client.search(query=user_query, search_depth="advanced", include_raw_content=True)
-        # return results
+        client = TavilyClient(api_key=TAVILY_API)
+        results = client.search(query=user_query, search_depth="advanced", include_raw_content=True)
+        return results
 
         # For now, just a placeholder:
-        return {
-            "message": f"Web search simulated for query: {user_query}",
-            "results": []
-        }
+        # return {
+        #     "message": f"Web search simulated for query: {user_query}",
+        #     "results": []
+        # }
 
     #############################################################################
     # 3) Helper: Chunk-Based Analysis
@@ -3408,10 +3408,10 @@ def main():
                     # Create a clickable markdown link; clicking it will open the file in a new tab
                     st.markdown(f"[**{file_key}**]({preview_url})", unsafe_allow_html=True)
 
-                st.markdown("[Play Space Galaga](http://127.0.0.1:5500/space.html)")
-                st.markdown("[Play Snake Game](http://127.0.0.1:5500/snake.html)")
-                st.markdown("[Play Atari Breakout](http://127.0.0.1:5500/atari.html)")
-                st.markdown("[Play Endless Runner](http://127.0.0.1:5500/surfer.html)")
+                st.markdown("[Play Space Galaga](http://43.204.44.226:5500/space.html)")
+                st.markdown("[Play Snake Game](http://43.204.44.226:5500/snake.html)")
+                st.markdown("[Play Atari Breakout](http://43.204.44.226:5500/atari.html)")
+                st.markdown("[Play Endless Runner](http://43.204.44.226:5500/surfer.html)")
 
 
                 top_k_metadata, answer, ws_response = query_documents_with_page_range(
@@ -3511,49 +3511,82 @@ def main():
             if user not in st.session_state.chat_history:
                 st.session_state.chat_history[user] = []
 
-            # 2) Now decide if we update an existing conversation or create a new one
-            current_conversation_id = st.session_state.get("current_conversation_id", None)
+            # Check if this is a continuation of an old conversation
+            original_conv_id = st.session_state.get("original_conversation_id")
 
-            if current_conversation_id:
-                # -- UPDATE existing conversation --
-                # Find that conversation in the user's list
+            if original_conv_id:
+                # This is a continuation of an old conversation
+                # 1. Find the original conversation to get its label
+                original_conv = None
+                original_label = "Conversation"
                 for conv in st.session_state.chat_history[user]:
-                    if conv.get("conversation_id") == current_conversation_id:
-                        # Overwrite the conversation's messages with the new messages
-                        conv["messages"] = st.session_state.messages
-                        # Optionally update timestamp so it sorts to the top
-                        conv["timestamp"] = current_time
-                        # Keep track of the current files / page ranges
-                        conv["files"] = st.session_state.selected_files
-                        conv["page_ranges"] = st.session_state.selected_page_ranges
+                    if conv.get("timestamp") == original_conv_id:
+                        original_conv = conv
+                        original_label = conv.get("label", original_label)
                         break
-            else:
-                # -- CREATE a new conversation --
+            
+                # 2. Create a new conversation with the old label
                 new_conversation_id = str(uuid.uuid4())
-                st.session_state.current_conversation_id = new_conversation_id
-
                 new_conversation = {
                     "conversation_id": new_conversation_id,
-                    "label": user_message[:50],  # or any default label
+                    "label": original_label,
                     "timestamp": current_time,
                     "messages": st.session_state.messages,
                     "files": st.session_state.selected_files,
                     "page_ranges": st.session_state.selected_page_ranges
                 }
 
+                # 3. Remove the old conversation
+                if original_conv:
+                    try:
+                        st.session_state.chat_history[user].remove(original_conv)
+                    except ValueError:
+                        pass
+
+            # 4. Add the new conversation
                 st.session_state.chat_history[user].append(new_conversation)
 
-            # 3) Sort the user’s chat list so newest is on top
+            # 5. Update session state
+                st.session_state.current_conversation_id = new_conversation_id
+                st.session_state.original_conversation_id = None  # Clear the original ID
+                
+            else:
+                # Normal new conversation flow
+                current_conversation_id = st.session_state.get("current_conversation_id")
+                
+                if current_conversation_id:
+                    # Update existing conversation
+                    for conv in st.session_state.chat_history[user]:
+                        if conv.get("conversation_id") == current_conversation_id:
+                            conv["messages"] = st.session_state.messages
+                            conv["timestamp"] = current_time
+                            conv["files"] = st.session_state.selected_files
+                            conv["page_ranges"] = st.session_state.selected_page_ranges
+                            break
+                else:
+                    # Create new conversation
+                    new_conversation_id = str(uuid.uuid4())
+                    st.session_state.current_conversation_id = new_conversation_id
+                    
+                    new_conversation = {
+                        "conversation_id": new_conversation_id,
+                        "label": user_message[:50],
+                        "timestamp": current_time,
+                        "messages": st.session_state.messages,
+                        "files": st.session_state.selected_files,
+                        "page_ranges": st.session_state.selected_page_ranges
+                    }
+                    
+                    st.session_state.chat_history[user].append(new_conversation)
+
+            # Sort and save
             st.session_state.chat_history[user] = sorted(
                 st.session_state.chat_history[user],
                 key=lambda x: x.get("timestamp", ""),
                 reverse=True
             )
 
-            # 4) Save updated chat_history
             save_chat_history(st.session_state.chat_history)
-
-            # 5) Rerun if you want the UI updated
             st.rerun()
 
             # # Append user message and then process query.
