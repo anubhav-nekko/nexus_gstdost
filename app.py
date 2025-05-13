@@ -2693,14 +2693,22 @@ def main():
 
         st.sidebar.header("Previous Conversations")
         user_conversations = st.session_state.chat_history.get(current_user, [])
-        unique_conversations = []
-        seen_labels = {}
-        for conv in user_conversations:
-            conv_label = conv.get("label") or conv.get('messages', [{}])[0].get("content", "")[:50]
-            if conv_label not in seen_labels:
-                seen_labels[conv_label] = conv
-                unique_conversations.append(conv)
-        unique_conversations.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+
+        # unique_conversations = []
+        # seen_labels = {}
+        # for conv in user_conversations:
+        #     conv_label = conv.get("label") or conv.get('messages', [{}])[0].get("content", "")[:50]
+        #     if conv_label not in seen_labels:
+        #         seen_labels[conv_label] = conv
+        #         unique_conversations.append(conv)
+        # unique_conversations.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+
+        # NEW CODE: Sort the entire list by timestamp
+        unique_conversations = sorted(
+            user_conversations, 
+            key=lambda x: x.get("timestamp", ""), 
+            reverse=True
+        )
 
         for conv in unique_conversations:
             # Use the conversation's timestamp as a unique identifier.
