@@ -761,8 +761,8 @@ if "logged_out" not in st.session_state:
 
 # Instantiate the Cookie Manager at the very top.
 cookies = EncryptedCookieManager(
-    prefix="nexusdms/",  # Use a unique prefix for your app.
-    password="abcdefgh"
+    prefix="lexdost/",  # Use a unique prefix for your app.
+    password="nexusdms"
 )
 
 if not cookies.ready():
