@@ -2582,7 +2582,7 @@ def main():
     elif option == "Query Documents":
         st.header("Query Documents")
         st.sidebar.header("Settings")
-        llm_model = st.sidebar.selectbox("Choose Your Model", ["Nova Lite", "Claude 3.7 Sonnet", "Claude 3.5 Sonnet", "Deepseek R1", "GPT 4o"])
+        llm_model = st.sidebar.selectbox("Choose Your Model", ["Claude 3.7 Sonnet", "Claude 3.5 Sonnet", "Deepseek R1", "Nova Lite", "GPT 4o"])
 
         # "New Chat" button resets conversation and state.
         if st.sidebar.button("New Chat"):
@@ -2942,63 +2942,6 @@ def main():
                     eco_mode
                 )
 
-                # if "error" in answer.lower():
-                #     if "bedrock" in answer.lower() or "tavily" in answer.lower():
-                #             summary_prompt_dict = {
-                #                 "system_message": "You are an intelligent query refiner. Your job is to take a user's original query (which may contain poor grammar or informal language) along with the last 5 messages of the conversation and Summarise it into a Detailed Concise Message which explains what the user is asking for. Ensure you do not miss any details",
-                #                 "user_query": f"User Query: {user_message}\n\nLast 5 Messages: {last_messages}"
-                #             }
-                #             if eco_mode:
-                #                 prompt = call_novalite_api(summary_prompt_dict["system_message"], summary_prompt_dict["user_query"])
-                #             else:
-                #                 prompt = call_claude_api(summary_prompt_dict["system_message"], summary_prompt_dict["user_query"])
-
-                #             if "error" in prompt and "bedrock" in prompt:
-                #                 last_messages = st.session_state.messages[-2:] if len(st.session_state.messages) >= 2 else st.session_state.messages
-                #                 summary_prompt_dict = {
-                #                     "system_message": "You are an intelligent query refiner. Your job is to take a user's original query (which may contain poor grammar or informal language) along with the last 5 messages of the conversation and Summarise it into a Detailed Concise Message which explains what the user is asking for. Ensure you do not miss any details",
-                #                     "user_query": f"User Query: {user_message}\n\nLast 5 Messages: {last_messages}"
-                #                 }
-                #                 if eco_mode:
-                #                     prompt = call_novalite_api(summary_prompt_dict["system_message"], summary_prompt_dict["user_query"])
-                #                 else:
-                #                     prompt = call_claude_api(summary_prompt_dict["system_message"], summary_prompt_dict["user_query"])
-
-                #             top_k_metadata, answer, ws_response = query_documents_with_page_range(
-                #                 st.session_state.selected_files, 
-                #                 st.session_state.selected_page_ranges, 
-                #                 prompt,
-                #                 top_k,
-                #                 [],
-                #                 web_search,
-                #                 llm_model,
-                #                 draft_mode, 
-                #                 analyse_mode, 
-                #                 eco_mode
-                #             )
-
-                #             if "error" in answer and "bedrock" in answer:
-                #                 top_k_metadata, answer, ws_response = query_documents_with_page_range(
-                #                     st.session_state.selected_files, 
-                #                     st.session_state.selected_page_ranges, 
-                #                     prompt,
-                #                     top_k,
-                #                     [],
-                #                     web_search,
-                #                     llm_model,
-                #                     draft_mode, 
-                #                     True,
-                #                     eco_mode
-                #                 )
-                #                 if "error" in answer and "bedrock" in answer:
-                #                     top_k_metadata = []
-                #                     answer = """Looks Like you have Reached the Model Limits. Follow the following Steps:
-                #                     1. Try Starting a New Chat (Ensure to Add the same Files you were working on)
-                #                     2. If the Above Does not Work, Enable `Analyze Mode` on the side panel and try again
-                #                     3. If the Above two do not work, try switching the model or reduce the topK slider.
-                #                     """
-                #                     ws_response = ""
-
                 st.session_state.sources.append({
                     "top_k_metadata": top_k_metadata,
                     "answer": answer,
@@ -3104,89 +3047,10 @@ def main():
             save_chat_history(st.session_state.chat_history)
             st.rerun()
 
-            # # Append user message and then process query.
-            # ist_timezone = pytz.timezone("Asia/Kolkata")
-            # timestamp_now = datetime.now(ist_timezone).strftime("%Y-%m-%d %H:%M:%S")
-            # st.session_state.messages.append({
-            #     "role": "user",
-            #     "content": user_message,
-            #     "time": timestamp_now
-            # })
-            # # Display the user message.
-            # with st.chat_message("user"):
-            #     st.markdown(user_message)
-
-            # # Prepare the last few messages for context.
-            # last_messages = st.session_state.messages[-5:] if len(st.session_state.messages) >= 5 else st.session_state.messages
-
-            # with st.spinner("Searching documents..."):
-            #     top_k_metadata, answer, ws_response = query_documents_with_page_range(
-            #         st.session_state.selected_files, 
-            #         st.session_state.selected_page_ranges, 
-            #         user_message,
-            #         top_k,
-            #         last_messages,
-            #         web_search,
-            #         llm_model,
-            #         draft_mode, 
-            #         analyse_mode
-            #     )
-            #     st.session_state.sources.append({
-            #         "top_k_metadata": top_k_metadata,
-            #         "answer": answer,
-            #         "websearch_metadata": ws_response
-            #     })
-
-            #     ist_timezone = pytz.timezone("Asia/Kolkata")
-            #     current_time = datetime.now(ist_timezone).strftime("%Y-%m-%d %H:%M:%S")
-
-            #     # Append assistant response.
-            #     st.session_state.messages.append({
-            #         "role": "assistant",
-            #         "content": answer,
-            #         "time": current_time,
-            #         "sources": [top_k_metadata, ws_response]
-            #     })
-
-            #     with st.chat_message("assistant"):
-            #         st.markdown(answer)
-
-            #     ist_timezone = pytz.timezone("Asia/Kolkata")
-            #     current_time = datetime.now(ist_timezone).strftime("%Y-%m-%d %H:%M:%S")
-
-            #     new_conversation_id = str(uuid.uuid4())
-            #     new_conversation = {
-            #         "conversation_id": new_conversation_id,
-            #         "label": user_message[:50],
-            #         "timestamp": current_time,
-            #         "messages": st.session_state.messages,
-            #         "files": st.session_state.selected_files,
-            #         "page_ranges": st.session_state.selected_page_ranges
-            #     }
-
-            #     user = st.session_state.username
-            #     if user not in st.session_state.chat_history:
-            #         st.session_state.chat_history[user] = []
-
-            #     # If this conversation is brand new, just append
-            #     # If you want to handle "merging" with existing, do it here.
-            #     st.session_state.current_conversation_id = new_conversation_id
-            #     st.session_state.chat_history[user].append(new_conversation)
-
-            #     # Sort so the newest conversation is on top
-            #     st.session_state.chat_history[user] = sorted(
-            #         st.session_state.chat_history[user],
-            #         key=lambda x: x.get("timestamp", ""),
-            #         reverse=True
-            #     )
-
-            #     save_chat_history(st.session_state.chat_history)
-            #     st.rerun()
-
     elif option == "Query Advanced":
         st.header("Query Advanced")
         st.sidebar.header("Settings")
-        llm_model = st.sidebar.selectbox("Choose Your Model", ["Nova Lite", "Claude 3.7 Sonnet", "Claude 3.5 Sonnet", "Deepseek R1", "GPT 4o"])
+        llm_model = st.sidebar.selectbox("Choose Your Model", ["Claude 3.7 Sonnet", "Claude 3.5 Sonnet", "Deepseek R1", "Nova Lite", "GPT 4o"])
         eco_mode = st.sidebar.toggle("Eco Mode", value=True)
         web_search = st.sidebar.toggle("Enable Web Search")
         top_k = st.sidebar.slider("Select Top-K Results", min_value=1, max_value=100, value=50, step=1)
@@ -3533,105 +3397,6 @@ def main():
             )
 
         st.plotly_chart(line_fig, use_container_width=True)
-
-        # st.header("Usage Monitoring")
-        
-        # # Add a dropdown in the sidebar for period selection
-        # period_options = ["Last 3 Days", "Last 7 Days", "Last 14 Days", "Last 1 Month", "Last 3 Months"]
-        # selected_period = st.sidebar.selectbox("Select Period", period_options, index=3)  # default to Last 1 Month
-        # # Map each option to the corresponding number of days
-        # period_days = {
-        #     "Last 3 Days": 3,
-        #     "Last 7 Days": 7,
-        #     "Last 14 Days": 14,
-        #     "Last 1 Month": 30,
-        #     "Last 3 Months": 90
-        # }
-        # selected_days = period_days[selected_period]
-        # st.subheader(f"Usage Monitoring - {selected_period}")
-
-        # # Load the chat history (this is a dict with keys as usernames)
-        # chat_history = load_chat_history()
-
-        # # Create a list of records: each record is { 'user': ..., 'timestamp': ... }
-        # records = []
-        # for user, conversations in chat_history.items():
-        #     for conv in conversations:
-        #         timestamp_str = conv.get("timestamp")
-        #         if timestamp_str:
-        #             try:
-        #                 ts = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
-        #                 records.append({"user": user, "timestamp": ts})
-        #             except Exception as e:
-        #                 st.warning(f"Timestamp format error for user {user}: {e}")
-
-        # if not records:
-        #     st.info("No usage data available.")
-        # else:
-        #     # Convert records to a Pandas DataFrame
-        #     df = pd.DataFrame(records)
-
-        #     # Filter for the selected period
-        #     today = datetime.today()
-        #     start_date = today - timedelta(days=selected_days)
-        #     df_period = df[df["timestamp"] >= start_date]
-
-        #     # --- Bar Graph: Total Queries per User ---
-        #     user_counts = df_period.groupby("user").size().reset_index(name="queries")
-        #     bar_fig = px.bar(
-        #         user_counts, 
-        #         x="user", 
-        #         y="queries",
-        #         title=f"Total Queries per User ({selected_period})",
-        #         labels={"user": "User", "queries": "Number of Queries"}
-        #     )
-        #     st.plotly_chart(bar_fig, use_container_width=True)
-
-        #     # --- Line Graph: Day-wise Queries per User with Moving Average ---
-        #     # Create a 'date' column (date only)
-        #     df_period["date"] = df_period["timestamp"].dt.date
-
-        #     # Count queries per user per day
-        #     daily_counts = df_period.groupby(["user", "date"]).size().reset_index(name="queries")
-
-        #     # Create a complete date range for the selected period
-        #     date_range = pd.date_range(start=start_date.date(), end=today.date())
-        #     all_users = daily_counts["user"].unique()
-        #     complete_data = []
-
-        #     for user in all_users:
-        #         user_df = daily_counts[daily_counts["user"] == user].copy()
-        #         user_df.set_index("date", inplace=True)
-        #         # Reindex to include all dates in the range, filling missing days with 0 queries
-        #         user_df = user_df.reindex(date_range, fill_value=0)
-        #         user_df = user_df.rename_axis("date").reset_index()
-        #         user_df["user"] = user
-        #         # Calculate a moving average using the selected period as window
-        #         user_df["moving_avg"] = user_df["queries"].rolling(window=selected_days, min_periods=1).mean()
-        #         complete_data.append(user_df)
-
-        #     daily_all = pd.concat(complete_data, ignore_index=True)
-
-        #     # Create the line graph with one line per user
-        #     line_fig = px.line(
-        #         daily_all, 
-        #         x="date", 
-        #         y="queries", 
-        #         color="user",
-        #         title=f"Daily Queries per User ({selected_period})",
-        #         labels={"date": "Date", "queries": "Number of Queries"}
-        #     )
-        #     # Add moving average lines for each user
-        #     for user in all_users:
-        #         user_data = daily_all[daily_all["user"] == user]
-        #         line_fig.add_trace(go.Scatter(
-        #             x=user_data["date"], 
-        #             y=user_data["moving_avg"],
-        #             mode="lines", 
-        #             name=f"{user} - {selected_period} MA"
-        #         ))
-
-        #     st.plotly_chart(line_fig, use_container_width=True)
 
     else:
         st.warning("No files available in the index. Please upload Documents to populate the index.")
