@@ -1307,18 +1307,17 @@ def chunk_text(pages_text, chunk_size=1):
 
 def delete_file(file_name):
     try:
-        # Delete from Azure Blob Storage:
-        blob_service_client = BlobServiceClient.from_connection_string(connection_string)
-        blob_client = blob_service_client.get_blob_client(container=s3_bucket_name, blob=file_name)
-        blob_client.delete_blob()
-        st.success(f"Deleted file '{file_name}' from Blob Storage.")
+        # Delete from Amazon S3:
+        s3_client.delete_object(Bucket=s3_bucket_name, Key=file_name)
+        st.success(f"Deleted file '{file_name}' from S3 bucket.")
     except Exception as e:
         st.error(f"Error deleting file: {str(e)}")
     
     # Remove the file from metadata_store (filter out all records with that filename)
     global metadata_store
     metadata_store = [md for md in metadata_store if md["filename"] != file_name]
-    # Optionally, update your index if needed and re-save metadata:
+    
+    # Optionally, update your index and re-save metadata
     save_index_and_metadata()
 
 def user_has_file_access(username, file_name):
