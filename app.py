@@ -510,6 +510,7 @@ system_message = """
     - TIP: Always provide long and detailed Answers. If there is any Anomaly, deviation or unique observation, make sure to report that as well.
     - NOTE: If using Web Search Results, Always Cite Web Sources at the end of your answer with necessary clickable hyperlinks.
     - Never use Double Quotes in your Answer. Use Backticks to highlight if necessary.
+    - Always end your answer by offering to do something the user might find useful next. (Use your judgement based on the conversation, context etc)
     """
 
 
