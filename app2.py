@@ -991,14 +991,78 @@ def create_word_doc(text):
     return buffer
 
 # Function to Generate titan embeddings
+# def generate_titan_embeddings(text):
+    # try:
+    #     # Generate embeddings using MPNet
+    #     embedding = mpnet_model.encode(text, normalize_embeddings=True)
+    #     return np.array(embedding)
+    # except Exception as e:
+    #     print(f"Error generating embeddings: {e}")
+    #     return None  # Return None to handle errors gracefully
+
+
 def generate_titan_embeddings(text):
+    """
+    Generate embeddings for given text(s) using Cohere via Bedrock (`bedrock_runtime2`).
+    Truncates each text to 2048 characters as per model limits and returns a NumPy array.
+    
+    Args:
+        text (str or list of str): Input text or list of texts to embed.
+        
+    Returns:
+        np.ndarray or None: 
+            - If `text` is a single string, returns a 1D array of shape (embedding_dim,).
+            - If `text` is a list of strings, returns a 2D array of shape (len(texts), embedding_dim).
+            - Returns None on failure.
+    """
     try:
-        # Generate embeddings using MPNet
-        embedding = mpnet_model.encode(text, normalize_embeddings=True)
-        return np.array(embedding)
+        # Detect whether user passed a single string or a list of strings
+        single_input = False
+        if isinstance(text, str):
+            texts = [text[:2048]]
+            single_input = True
+        else:
+            texts = [t[:2048] for t in text]
+
+        # Build the JSON payload exactly as Cohere expects
+        body = {
+            "texts": texts,
+            "input_type": "search_document"
+        }
+
+        # Invoke the Cohere model via your existing bedrock-runtime client
+        response = bedrock_runtime2.invoke_model(
+            modelId="cohere.embed-multilingual-v3",
+            contentType="application/json",
+            accept="application/json",
+            body=json.dumps(body)
+        )
+
+        # Bedrock Runtime returns a StreamingBody under response["body"]
+        resp_body = response.get("body")
+        if resp_body is None:
+            print("❌ No 'body' in Bedrock Runtime response:", response)
+            return None
+
+        # Read & decode the streaming response, then parse JSON
+        decoded = resp_body.read().decode("utf-8")
+        resp_json = json.loads(decoded)
+
+        # Extract embeddings
+        embeddings = resp_json.get("embeddings")
+        if embeddings is None:
+            print("⚠️ 'embeddings' key missing in response:", resp_json)
+            return None
+
+        # Convert to NumPy array
+        arr = np.array(embeddings, dtype=np.float32)
+
+        # If a single string was given, return the first (and only) vector
+        return arr[0] if single_input else arr
+
     except Exception as e:
-        print(f"Error generating embeddings: {e}")
-        return None  # Return None to handle errors gracefully
+        print(f"❌ Error generating embeddings from Cohere via Bedrock Runtime: {e}")
+        return None
 
 def call_llm_api(system_message, user_query):
     # Combine system and user messages
