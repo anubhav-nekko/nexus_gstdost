@@ -734,7 +734,7 @@ def call_deepseek_api(system_message, user_query):
         return f"An error occurred: {str(e)}"
 
 # Faiss index initialization
-dimension = 768  # Embedding dimension for text embeddings v3
+dimension = 1024 # 768  # Embedding dimension for text embeddings v3
 faiss_index = faiss.IndexFlatL2(dimension)
 metadata_store = []
 
