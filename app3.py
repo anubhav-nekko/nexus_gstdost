@@ -497,13 +497,50 @@ def create_word_doc(text):
 
 # Function to Generate titan embeddings
 def generate_titan_embeddings(text):
+    # try:
+    #     # Generate embeddings using MPNet
+    #     embedding = mpnet_model.encode(text, normalize_embeddings=True)
+    #     return np.array(embedding)
+    # except Exception as e:
+    #     print(f"Error generating embeddings: {e}")
+    #     return None  # Return None to handle errors gracefully
+    """
+    Generate embeddings for given text(s) using Cohere via Bedrock.
+    Truncates each text to 2048 characters as per model limits and returns a NumPy array.
+    """
     try:
-        # Generate embeddings using MPNet
-        embedding = mpnet_model.encode(text, normalize_embeddings=True)
-        return np.array(embedding)
+        # Ensure input is a list
+        texts = text if isinstance(text, list) else [text]
+
+        # Truncate all texts to 2048 characters
+        texts = [t[:2048] for t in texts]
+
+        body = {
+            "texts": texts,
+            "input_type": "search_document"
+        }
+
+        response = bedrock_client.invoke_model(
+            modelId= "cohere.embed-multilingual-v3", # "cohere.embed-english-v3",
+            contentType="application/json",
+            accept="application/json",
+            body=json.dumps(body)
+        )
+
+        response_body = json.loads(response["body"].read())
+        embeddings = response_body.get("embeddings")
+
+        if not embeddings:
+            print("⚠️ No embeddings returned from Cohere.")
+            print("Response body:", response_body)
+            return None
+
+        # Return embeddings as a NumPy array
+        return np.array(embeddings, dtype=np.float32)
+
     except Exception as e:
-        print(f"Error generating embeddings: {e}")
-        return None  # Return None to handle errors gracefully
+        print(f"❌ Error generating embeddings from Cohere: {e}")
+        return None
 
 def call_llm_api(system_message, user_query):
     # Combine system and user messages
