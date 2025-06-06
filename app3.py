@@ -2,6 +2,7 @@ prompt_library = {
     "custom": ""
 }
 
+# FIXED: Updated system message with better length control
 system_message = """
     You are an advanced legal data analyst specializing in legal document analysis. Provide precise, focused analysis of the provided document text, highlighting anomalies, procedural errors, and legal nuances. Include any supporting legal citations and mention if further clarification is needed.
     Your task is to do the following:
