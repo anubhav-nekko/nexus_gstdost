@@ -32,7 +32,7 @@ from pydantic import BaseModel
 from typing import List, Dict, Tuple, Optional
 
 # Helper logic from Streamlit backend
-from streamlit_app import (
+from app2 import (
     add_file_to_index,
     load_index_and_metadata,
     query_documents_with_page_range,
