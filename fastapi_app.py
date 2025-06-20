@@ -157,17 +157,17 @@ async def upload_files(
             wrapped = StreamlitFileAdapter(uf)
             add_file_to_index(wrapped)
             uploaded.append(uf.filename)
-            # Patch owner field for all new metadata rows of this file
+                        # Patch owner for every new metadata row for this file if `username` provided
             if username:
                 for md in metadata_store:
-                    if md["filename"] == uf.filename and md.get("owner") == "unknown":
+                    if md["filename"] == uf.filename and md.get("owner") in (None, "unknown"):
                         md["owner"] = username
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"Failed processing {uf.filename}: {exc}")
-        # Persist updated metadata / FAISS index so future API calls (or other
-    # processes) can see the new files immediately.
+
+    # Persist to disk so other workers / future requests see the update
     save_index_and_metadata()
-    return {"status": "success", "uploaded": uploaded}
+    return {"status": "success", "uploaded": uploaded}": uploaded}
 
 # ---------------------------------------------------------------------------
 # Endpoint: query
