@@ -1,173 +1,237 @@
-# fastapi_app.py
-"""Nexus DMS – FastAPI micro‑service
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-A thin API wrapper that re‑uses the heavy‑lifting utilities living in
-`streamlit_app.py`.  It lets other services (n8n / Zapier / CRON / mobile
-clients) ingest new evidence and run queries without going through the
-Streamlit front‑end.
-
-Key additions requested
-----------------------
-1. **`GET /files`** – list every file currently indexed (owner + page list).
-2. **Username segregation** – the `POST /upload-files` endpoint now accepts a
-   `username` form‑field; we temporarily set `st.session_state["username"]`
-   so helper functions can record ownership.
-
-The existing three endpoints are retained:
-* **`POST /upload-files`** – upload & index one or many files.
-* **`POST /query`** – semantic search across selected filenames (full page
-  range automatically detected).
-* **`POST /email-severity`** – classify an email body (plus optional
-  attachment) into *Normal / Important / Critical* with JSON rationale.
-
-Because `streamlit_app.py` relies on the global `streamlit` session state, we
-import `streamlit as st` and prime `st.session_state` so that helper functions
-continue to work even outside a Streamlit context.
-"""
-from __future__ import annotations
-
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
-from typing import List, Dict, Tuple
+from fastapi import FastAPI, File, UploadFile, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import List, Dict, Tuple, Optional
+import uvicorn
 import json, re
 
-# ── Re‑use everything we already built in the Streamlit layer ────────────────
-import streamlit as st                  # noqa – needed for helper functions
-import app2 as sa             # the big helper module you showed
+"""fastapi_app.py – GST DOST backend micro‑service
 
-# Ensure the session_state keys exist so helper funcs don’t crash
-if "username" not in st.session_state:
-    st.session_state["username"] = "api_user"
+Key endpoints
+--------------
+1. **POST /upload**      – store & index files.  Accepts optional `username` so we can tag
+   ownership in `metadata_store` even though `streamlit_app.add_file_to_index` was built
+   for Streamlit sessions.
+2. **GET /files**        – list all indexed files (optionally filter by `username`).
+3. **POST /query**       – natural‑language search across full documents (no page range UI).
+4. **POST /email-severity** – classify an email + attachments into Low / Normal / …
+
+The helper functions come directly from `streamlit_app.py` (same folder).  The only
+incompatibility is FastAPI’s `UploadFile` exposing `.filename` instead of `.name`, which
+we solve via the `StreamlitFileAdapter` wrapper.
+"""
 
 # ---------------------------------------------------------------------------
-app = FastAPI(title="Nexus DMS API", version="1.1.0")
+# Imports & helper wrappers
+# ---------------------------------------------------------------------------
 
-# ── Utility helpers ─────────────────────────────────────────────────────────
+from datetime import datetime
+from fastapi import FastAPI, File, UploadFile, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import List, Dict, Tuple, Optional
 
-def _patch_file(f: UploadFile) -> UploadFile:
-    """Monkey‑patch FastAPI `UploadFile` so it looks like a Streamlit file."""
-    if not hasattr(f, "name"):
-        f.name = f.filename            # Streamlit’s helper expects `.name`
-    return f
+# Helper logic from Streamlit backend
+from streamlit_app import (
+    add_file_to_index,
+    load_index_and_metadata,
+    query_documents_with_page_range,
+    metadata_store,
+    call_llm_api,
+    call_claude_api,
+    call_gpt_api,
+    call_novalite_api,
+    call_deepseek_api,
+)
 
+# ---------------------------------------------------------------------------
+# Adapter: make FastAPI UploadFile look like Streamlit UploadedFile
+# ---------------------------------------------------------------------------
+
+class StreamlitFileAdapter:
+    """Wrap `fastapi.UploadFile` so downstream helpers see `.name` & `.read`."""
+
+    def __init__(self, uf: UploadFile):
+        self._uf = uf
+        self.name = uf.filename  # attribute expected by Streamlit helpers
+        self.filename = uf.filename  # keep original attr
+
+    def read(self, *args, **kwargs):
+        return self._uf.file.read(*args, **kwargs)
+
+    def seek(self, *args, **kwargs):
+        return self._uf.file.seek(*args, **kwargs)
+
+    def __getattr__(self, item):
+        return getattr(self._uf, item)
+
+# ---------------------------------------------------------------------------
+# FastAPI setup
+# ---------------------------------------------------------------------------
+
+app = FastAPI(title="GST DOST – Document Intelligence API", version="1.1.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Load FAISS index & metadata on startup
+load_index_and_metadata()
+
+# ---------------------------------------------------------------------------
+# Pydantic models
+# ---------------------------------------------------------------------------
+
+class QueryRequest(BaseModel):
+    query: str
+    filenames: List[str]
+    top_k: int = 50
+    model_name: str = "Claude 3.7 Sonnet"
+    web_search: bool = False
+    draft_mode: bool = False
+    analyse_mode: bool = False
+    eco_mode: bool = False
+
+class EmailSeverityResponse(BaseModel):
+    severity: str
+    reasoning: str
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 def _full_page_ranges(filenames: List[str]) -> Dict[str, Tuple[int, int]]:
-    """Return {filename: (min_pg, max_pg)} using sa.metadata_store."""
     ranges: Dict[str, Tuple[int, int]] = {}
-    for fname in filenames:
-        pages = [m["page"] for m in sa.metadata_store if m["filename"] == fname]
+    for fn in filenames:
+        pages = [m["page"] for m in metadata_store if m["filename"] == fn]
         if not pages:
-            raise HTTPException(404, f"No pages indexed for {fname}")
-        ranges[fname] = (min(pages), max(pages))
+            raise HTTPException(status_code=404, detail=f"File '{fn}' not found in index")
+        ranges[fn] = (min(pages), max(pages))
     return ranges
 
-# ── API End‑points ──────────────────────────────────────────────────────────
 
-@app.post("/upload-files")
+def _invoke_llm(system_msg: str, user_msg: str, model: str) -> str:
+    if model == "Claude 3.5 Sonnet":
+        return call_llm_api(system_msg, user_msg)
+    if model == "Claude 3.7 Sonnet":
+        return call_claude_api(system_msg, user_msg)
+    if model == "GPT 4o":
+        return call_gpt_api(system_msg, user_msg)
+    if model == "Nova Lite":
+        return call_novalite_api(system_msg, user_msg)
+    if model == "Deepseek R1":
+        return call_deepseek_api(system_msg, user_msg)
+    return call_claude_api(system_msg, user_msg)
+
+# ---------------------------------------------------------------------------
+# Endpoint: list files
+# ---------------------------------------------------------------------------
+
+@app.get("/files", tags=["Documents"])
+async def list_files(username: Optional[str] = Query(None, description="Filter by owner")):
+    """Return list of filenames present in the index (optionally by owner)."""
+    files = []
+    for md in metadata_store:
+        if username and md.get("owner") != username:
+            continue
+        files.append(md["filename"])
+    unique_files = sorted(set(files))
+    return {"count": len(unique_files), "files": unique_files}
+
+# ---------------------------------------------------------------------------
+# Endpoint: upload
+# ---------------------------------------------------------------------------
+
+@app.post("/upload", tags=["Documents"])
 async def upload_files(
-    username: str = Form(...),
-    files: List[UploadFile] = File(...)
+    files: List[UploadFile] = File(...),
+    username: Optional[str] = Query(None, description="Username / owner of the files"),
 ):
-    """Upload one or many documents, index them and tag with *owner=username*."""
-    st.session_state["username"] = username  # hand‑off for helper functions
-
-    saved: List[str] = []
-    for up in files:
-        f = _patch_file(up)
+    uploaded: List[str] = []
+    for uf in files:
         try:
-            sa.add_file_to_index(f)   # uses username from session_state
-            saved.append(f.name)
-        except Exception as e:        # pragma: no cover
-            raise HTTPException(500, f"Failed processing {f.name}: {e}")
-    return {"status": "success", "files_saved": saved}
+            wrapped = StreamlitFileAdapter(uf)
+            add_file_to_index(wrapped)
+            uploaded.append(uf.filename)
+            # Patch owner field for all new metadata rows of this file
+            if username:
+                for md in metadata_store:
+                    if md["filename"] == uf.filename and md.get("owner") == "unknown":
+                        md["owner"] = username
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Failed processing {uf.filename}: {exc}")
+    return {"status": "success", "uploaded": uploaded}
 
+# ---------------------------------------------------------------------------
+# Endpoint: query
+# ---------------------------------------------------------------------------
 
-@app.get("/files", response_model=Dict[str, Dict])
-def list_files():
-    """Return every unique filename currently present together with owner & pages."""
-    registry: Dict[str, Dict] = {}
-    for m in sa.metadata_store:
-        fname, owner, pg = m["filename"], m.get("owner", "unknown"), m["page"]
-        entry = registry.setdefault(fname, {"owner": owner, "pages": set()})
-        entry["pages"].add(pg)
-    # convert page sets to sorted lists so FastAPI can serialise them
-    for e in registry.values():
-        e["pages"] = sorted(e["pages"])
-    return registry
-
-
-@app.post("/query")
-async def query_documents(
-    query: str = Form(...),
-    filenames: List[str] = Form(...),
-    top_k: int = Form(20)
-):
-    """Run a semantic query across selected filenames (full page range)."""
-    selected_files = list(filenames)
-    selected_page_ranges = _full_page_ranges(selected_files)
-
-    top_md, answer, _ = sa.query_documents_with_page_range(
-        selected_files,
-        selected_page_ranges,
-        query,
-        top_k,
+@app.post("/query", tags=["Documents"])
+async def query_documents(req: QueryRequest):
+    page_ranges = _full_page_ranges(req.filenames)
+    chunks, answer, ws_data = query_documents_with_page_range(
+        selected_files=req.filenames,
+        selected_page_ranges=page_ranges,
+        prompt=req.query,
+        top_k=req.top_k,
         last_messages=[],
-        web_search=False,
-        llm_model="Claude 3.5 Sonnet",
-        draft_mode=False,
-        analyse_mode=False,
-        eco_mode=False,
+        web_search=req.web_search,
+        llm_model=req.model_name,
+        draft_mode=req.draft_mode,
+        analyse_mode=req.analyse_mode,
+        eco_mode=req.eco_mode,
     )
-    return {"answer": answer, "sources": top_md}
+    return {"answer": answer, "sources": chunks, "web_search_results": ws_data}
 
+# ---------------------------------------------------------------------------
+# Endpoint: email severity
+# ---------------------------------------------------------------------------
 
-@app.post("/email-severity")
+EMAIL_PROMPT = (
+    "You are an email‑triage assistant for a busy legal‑tax consultancy. "
+    "Read the email body plus any attached OCR text. "
+    "Return JSON with keys `severity` (Low/Normal/Important/Urgent/Critical) and `reasoning`."
+)
+
+@app.post("/email-severity", response_model=EmailSeverityResponse, tags=["Email"])
 async def email_severity(
-    username: str = Form(...),
-    email_body: str = Form(...),
-    attachment: UploadFile | None = File(None)
+    email_body: str = File(..., description="Raw email text body"),
+    attachments: Optional[List[UploadFile]] = File(None, description="Email attachments"),
+    model_name: str = "Claude 3.7 Sonnet",
 ):
-    """Classify an incoming email + attachment as Normal/Important/Critical."""
-    st.session_state["username"] = username
+    new_files: List[str] = []
+    if attachments:
+        for uf in attachments:
+            wrapped = StreamlitFileAdapter(uf)
+            add_file_to_index(wrapped)
+            new_files.append(uf.filename)
 
-    attachment_text = ""
-    attach_name: str | None = None
-    if attachment is not None:
-        f = _patch_file(attachment)
-        sa.add_file_to_index(f)
-        attach_name = f.name
-        # gather all text from that file for context (may be large)
-        attachment_text = "\n".join(
-            m["text"] for m in sa.metadata_store if m["filename"] == f.name
-        )[:4000]  # cap to keep prompt size sane
+    # gather attachment text
+    blocks: List[str] = []
+    for fn in new_files:
+        pages = sorted([m for m in metadata_store if m["filename"] == fn], key=lambda x: x["page"])
+        blocks.append(f"Attachment {fn}:\n" + "\n".join(p["text"] for p in pages))
+    attach_txt = "\n\n".join(blocks) or "(no attachments)"
 
-    prompt = (
-        "You are a compliance e‑mail triage bot. Categories: Normal, Important, "
-        "Critical. Read the e‑mail and optional attachment excerpt. Return *only* "
-        "valid JSON with keys `severity` and `reasoning`.\n\n"
-        f"Email Body:\n{email_body}\n\nAttachment Excerpt:\n{attachment_text}"
-    )
+    llm_raw = _invoke_llm(EMAIL_PROMPT, f"EMAIL BODY:\n{email_body}\n\nATTACHMENTS:\n{attach_txt}", model_name)
 
-    raw = sa.call_llm_api("You are a JSON‑only responder.", prompt)
-    # attempt to parse; fall back gracefully
     try:
-        if "```" in raw:
-            raw = re.split(r"```(?:json)?", raw)[1]
-        result = json.loads(raw)
+        data = json.loads(llm_raw)
     except Exception:
-        result = {"severity": "Normal", "reasoning": raw.strip()[:500]}
+        data = json.loads(re.search(r"\{.*\}", llm_raw, re.S).group(0))
 
-    # add a bit of meta for caller convenience
-    result.update(
-        {
-            "attachment_processed": attachment is not None,
-            "attachment_filename": attach_name,
-        }
-    )
-    return result
+    sev = str(data.get("severity", "Normal")).title()
+    if sev.lower() not in {"low", "normal", "important", "urgent", "critical"}:
+        sev = "Normal"
+    reason = data.get("reasoning", "No reasoning provided.")
+    return EmailSeverityResponse(severity=sev, reasoning=reason)
 
 # ---------------------------------------------------------------------------
-# Optional: a simple health‑check
+# Local dev entry‑point
 # ---------------------------------------------------------------------------
-@app.get("/health")
-def health():
-    return {"status": "ok"}
+
+if __name__ == "__main__":
+    uvicorn.run("fastapi_app:app", host="0.0.0.0", port=8000, reload=True)
