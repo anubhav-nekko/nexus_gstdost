@@ -167,7 +167,7 @@ async def upload_files(
 
     # Persist to disk so other workers / future requests see the update
     save_index_and_metadata()
-    return {"status": "success", "uploaded": uploaded}": uploaded}
+        return {"status": "success", "uploaded": uploaded}
 
 # ---------------------------------------------------------------------------
 # Endpoint: query
