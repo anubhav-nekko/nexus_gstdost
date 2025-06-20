@@ -37,6 +37,7 @@ from app2 import (
     load_index_and_metadata,
     query_documents_with_page_range,
     metadata_store,
+    save_index_and_metadata,  # <-- ensure persistence after FastAPI uploads
     call_llm_api,
     call_claude_api,
     call_gpt_api,
@@ -163,6 +164,9 @@ async def upload_files(
                         md["owner"] = username
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"Failed processing {uf.filename}: {exc}")
+        # Persist updated metadata / FAISS index so future API calls (or other
+    # processes) can see the new files immediately.
+    save_index_and_metadata()
     return {"status": "success", "uploaded": uploaded}
 
 # ---------------------------------------------------------------------------
